@@ -25,6 +25,9 @@ void RP_Init(void) {
     hadc2.Init.NbrOfConversion = 1;
     /* 调用HAL库初始化ADC2，使上述配置生效 */
     HAL_ADC_Init(&hadc2);
+
+    /* ADC 自校准 — 消除内部偏移误差，使读数准确覆盖 0~4095 */
+    HAL_ADCEx_Calibration_Start(&hadc2);
 }
 
 

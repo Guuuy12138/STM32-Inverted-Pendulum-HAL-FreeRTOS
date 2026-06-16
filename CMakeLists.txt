@@ -47,6 +47,7 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/BSP/encoder.h
         Core/APP/Tasks/UITask.c
         Core/APP/Tasks/ControlTask.c
+        Core/APP/Tasks/SerialTask.c
 )
 
 # Add STM32CubeMX generated sources
