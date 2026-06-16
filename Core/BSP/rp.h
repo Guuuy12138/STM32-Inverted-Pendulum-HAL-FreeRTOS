@@ -13,6 +13,11 @@
  * @brief RP数据结构体，每个通道的raw值和percent值独立存放
  */
 typedef struct {
+    /*
+     * struct 将4个通道变量在内存中连续排列（与数组布局一致）
+     * union  让同一块内存拥有 struct 和 数组 两种访问方式
+     *        → 循环遍历用 raw[i]，单点访问用 chX_raw，操作同一份数据
+     */
     union {
         struct {
             uint16_t ch2_raw;  /* ADC_CH2 (PA2) 原始值 0~4095 */
@@ -20,7 +25,7 @@ typedef struct {
             uint16_t ch4_raw;  /* ADC_CH4 (PA4) 原始值 0~4095 */
             uint16_t ch5_raw;  /* ADC_CH5 (PA5) 原始值 0~4095 */
         };
-        uint16_t raw[RP_CHANNELS];  /* 数组方式访问: raw[0]=CH2, raw[1]=CH3, ... */
+        uint16_t raw[RP_CHANNELS];  /* raw[0]=CH2, raw[1]=CH3, ... */
     };
 
     union {
@@ -30,7 +35,7 @@ typedef struct {
             float ch4_percent;  /* ADC_CH4 百分比 0.0~100.0 */
             float ch5_percent;  /* ADC_CH5 百分比 0.0~100.0 */
         };
-        float percent[RP_CHANNELS];  /* 数组方式访问 */
+        float percent[RP_CHANNELS];  /* percent[0]=CH2, percent[1]=CH3, ... */
     };
 } RP_Data;
 
