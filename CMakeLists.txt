@@ -41,6 +41,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/Algorithm/pid.h
         Core/BSP/rp.c
         Core/BSP/rp.h
+        Core/BSP/key.c
+        Core/BSP/key.h
 )
 
 # Add STM32CubeMX generated sources

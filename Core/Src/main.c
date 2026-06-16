@@ -25,7 +25,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 
+#include "oled.h"
+#include "TB6612.h"
+#include "key.h"
+#include "rp.h"
+#include "font.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,13 +100,38 @@ int main(void)
   MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
 
+  HAL_Delay(20);
+  OLED_Init();
+  TB6612_Init();
+  RP_Init();
+
+  MotorState state = MOTOR_STOP;
+  int16_t PWM = 0;
+  char message[20];
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
+    if (KEY_IsClicked(KEY_1) == 1) {
+      PWM += 10;
+      if (PWM > 100){PWM = 100;}
+    }else if (KEY_IsClicked(KEY_2) == 1) {
+      PWM -= 10;
+      if (PWM < -100){PWM = -100;}
+    }else if (KEY_IsClicked(KEY_3) == 1) {
+      PWM = 0;
+    }
+    if (PWM > 0){state = MOTOR_CW;}
+    else if (PWM < 0){state = MOTOR_CCW;}
+    else {state = MOTOR_STOP;}
+    uint8_t speed = (uint8_t)(PWM > 0 ? PWM : -PWM);
+    TB6612_Run(MOTOR_A, state, speed);
+    OLED_NewFrame();
+    snprintf(message, sizeof(message), "PWM: %+04d", PWM);
+    OLED_PrintASCIIString(0, 0, message, &afont16x8, OLED_COLOR_NORMAL);
+    OLED_ShowFrame();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

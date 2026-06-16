@@ -71,20 +71,20 @@ typedef struct {
  * 数据来自 CubeMX 在 main.h 里生成的宏定义。
  */
 static const MotorPins motor[MOTOR_B + 1] = {
-    /* 电机 A：IN1=PB12, IN2=PB13, PWM=TIM2_CH1(PA0) */
+    /* 电机 A：IN1=PB13, IN2=PB12, PWM=TIM2_CH1(PA0) — 方向已对调 */
     [MOTOR_A] = {
-        .in1_port = AIN1_GPIO_Port,
-        .in1_pin  = AIN1_Pin,
-        .in2_port = AIN2_GPIO_Port,
-        .in2_pin  = AIN2_Pin,
+        .in1_port = AIN2_GPIO_Port,
+        .in1_pin  = AIN2_Pin,
+        .in2_port = AIN1_GPIO_Port,
+        .in2_pin  = AIN1_Pin,
         .tim_ch   = TIM_CHANNEL_1,
     },
-    /* 电机 B：IN1=PB14, IN2=PB15, PWM=TIM2_CH2(PA1) */
+    /* 电机 B：IN1=PB15, IN2=PB14, PWM=TIM2_CH2(PA1) — 方向已对调 */
     [MOTOR_B] = {
-        .in1_port = BIN1_GPIO_Port,
-        .in1_pin  = BIN1_Pin,
-        .in2_port = BIN2_GPIO_Port,
-        .in2_pin  = BIN2_Pin,
+        .in1_port = BIN2_GPIO_Port,
+        .in1_pin  = BIN2_Pin,
+        .in2_port = BIN1_GPIO_Port,
+        .in2_pin  = BIN1_Pin,
         .tim_ch   = TIM_CHANNEL_2,
     },
 };
