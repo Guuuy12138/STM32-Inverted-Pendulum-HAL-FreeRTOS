@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "adc.h"
 #include "i2c.h"
 #include "tim.h"
@@ -25,13 +26,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
 
-#include "oled.h"
-#include "TB6612.h"
-#include "key.h"
-#include "rp.h"
-#include "font.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +52,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -98,40 +94,24 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   MX_ADC2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_Delay(20);
-  OLED_Init();
-  TB6612_Init();
-  RP_Init();
-
-  MotorState state = MOTOR_STOP;
-  int16_t PWM = 0;
-  char message[20];
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    if (KEY_IsClicked(KEY_1) == 1) {
-      PWM += 10;
-      if (PWM > 100){PWM = 100;}
-    }else if (KEY_IsClicked(KEY_2) == 1) {
-      PWM -= 10;
-      if (PWM < -100){PWM = -100;}
-    }else if (KEY_IsClicked(KEY_3) == 1) {
-      PWM = 0;
-    }
-    if (PWM > 0){state = MOTOR_CW;}
-    else if (PWM < 0){state = MOTOR_CCW;}
-    else {state = MOTOR_STOP;}
-    uint8_t speed = (uint8_t)(PWM > 0 ? PWM : -PWM);
-    TB6612_Run(MOTOR_A, state, speed);
-    OLED_NewFrame();
-    snprintf(message, sizeof(message), "PWM: %+04d", PWM);
-    OLED_PrintASCIIString(0, 0, message, &afont16x8, OLED_COLOR_NORMAL);
-    OLED_ShowFrame();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
