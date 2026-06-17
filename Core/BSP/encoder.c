@@ -75,10 +75,11 @@ void ENCODER_Reset(void)
 }
 
 /**
- * @brief  读取编码器增量并自动清零
+ * @brief  读取编码器增量
  *
- * 先读 CNT → 转有符号 → 清零 CNT，一步到位。
- * 适合在固定周期的控制循环中直接获取位置增量（即速度信号）。
+ * 通过相邻两次读数的差值计算增量，不修改 CNT 硬件计数器，
+ * 因此不存在读-清零竞争，不会丢失编码器脉冲。
+ * uint16_t 减法自动处理 16 位计数器回绕，再转 int16_t 得到有符号增量。
  *
  * @return int16_t 自上次调用以来的编码器增量
  *
@@ -88,7 +89,17 @@ void ENCODER_Reset(void)
  */
 int16_t ENCODER_GetDelta(void)
 {
-    int16_t delta = (int16_t)(uint16_t)(htim3.Instance->CNT);
-    __HAL_TIM_SET_COUNTER(&htim3, 0);
+    static uint16_t last_cnt = 0;
+    static uint8_t  first_call = 1;
+    uint16_t now = htim3.Instance->CNT;
+
+    if (first_call) {
+        last_cnt = now;
+        first_call = 0;
+        return 0;
+    }
+
+    int16_t delta = (int16_t)(now - last_cnt);
+    last_cnt = now;
     return delta;
 }

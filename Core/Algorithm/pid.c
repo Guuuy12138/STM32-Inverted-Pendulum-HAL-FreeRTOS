@@ -9,8 +9,16 @@
 /* 辅助宏                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** @brief 限幅宏：将 val 钳制在 [lo, hi] 区间内 */
-#define CLAMP(val, lo, hi)  (((val) < (lo)) ? (lo) : ((val) > (hi)) ? (hi) : (val))
+/**
+ * @brief 限幅函数：将 val 钳制在 [lo, hi] 区间内
+ * @note  使用 inline 函数代替宏，避免参数多次求值
+ */
+static inline float CLAMP(float val, float lo, float hi)
+{
+    if (val < lo) return lo;
+    if (val > hi) return hi;
+    return val;
+}
 
 /* -------------------------------------------------------------------------- */
 /* 公共函数                                                                    */
@@ -109,8 +117,8 @@ static float PID_IncrementalCore(PID_TypeDef *pid, float actual)
                   + pid->Ki * pid->Error0
                   + pid->Kd * (pid->Error0 - 2.0f * pid->Error1 + pid->Error2);
 
-    /* ---- 增量限幅 ---- */
-    dOutput = CLAMP(dOutput, pid->outMin, pid->outMax);
+    /* 增量不按绝对输出限幅（否则 outMin=0 时会阻止负增量导致无法减速）。
+       如需限制单步增量幅度，请在调用方对累积输出做 CLAMP。 */
 
     /* ---- Error2 ← Error1, Error1 ← Error0 ---- */
     pid->Error2 = pid->Error1;

@@ -35,11 +35,20 @@
 #define KEY_COUNT           4
 
 /* -------------------------------------------------------------------------- */
-/* 内部状态（边缘触发）                                                          */
+/* 内部状态（消抖 + 边缘触发）                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** @brief 每个按键是否已经触发过（按住不重复触发，松开后清零） */
+/** @brief 每个按键是否已经触发过（按住不重复触发，松开后重置） */
 static uint8_t key_fired[KEY_COUNT] = {0};
+
+/** @brief 最后一次电平变化时的 tick（用于消抖计时） */
+static uint32_t key_last_tick[KEY_COUNT] = {0};
+
+/** @brief 前一个未消抖电平状态（用于检测跳变） */
+static uint8_t key_last_raw[KEY_COUNT] = {0};
+
+/** @brief 消抖时间（ms），机械按键典型弹跳 5-20ms */
+#define KEY_DEBOUNCE_MS  30u
 
 /* -------------------------------------------------------------------------- */
 /* 内部类型                                                                    */
@@ -103,24 +112,41 @@ bool KEY_IsPressed(KeyID id)
 }
 
 /**
- * @brief  检测按键单击（纯边缘触发，无消抖）
+ * @brief  检测按键单击（消抖 + 边缘触发，按住只触发一次）
  *
- *   按下 → 立即触发一次，按住不重复，松开后复位。
+ *   消抖机制：电平变化后必须稳定 KEY_DEBOUNCE_MS（30ms）才认为有效。
+ *   有效按下 → 立即返回 true 一次，按住不重复，松开后自动复位。
  *
  * @param  id  按键 ID：KEY_1 / KEY_2 / KEY_3 / KEY_4
- * @return true  = 检测到一次按下
- *         false = 未按下 / 已触发过（按住不放）/ id 非法
+ * @return true  = 检测到一次有效按下
+ *         false = 未按下 / 消抖中 / 已触发过（按住不放）/ id 非法
  */
 bool KEY_IsClicked(KeyID id)
 {
     if (id >= KEY_COUNT) return false;
 
-    if (KEY_IsPressed(id)) {
+    uint8_t raw = (HAL_GPIO_ReadPin(key[id].port, key[id].pin) == KEY_PRESSED_LEVEL) ? 1 : 0;
+    uint32_t now = HAL_GetTick();
+
+    /* 电平变化 → 重置消抖计时 */
+    if (raw != key_last_raw[id]) {
+        key_last_raw[id] = raw;
+        key_last_tick[id] = now;
+        return false;                     // 正在跳变，不触发
+    }
+
+    /* 稳定时间不足消抖窗口 → 忽略 */
+    if ((now - key_last_tick[id]) < KEY_DEBOUNCE_MS) {
+        return false;
+    }
+
+    /* 消抖后的稳定状态 → 边缘检测 */
+    if (raw) {                            // 按下
         if (!key_fired[id]) {
             key_fired[id] = 1;
             return true;
         }
-    } else {
+    } else {                              // 松开
         key_fired[id] = 0;
     }
 

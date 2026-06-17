@@ -51,21 +51,21 @@
 osThreadId_t UITaskHandle;
 const osThreadAttr_t UITask_attributes = {
   .name = "UITask",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for BalanceTask */
 osThreadId_t BalanceTaskHandle;
 const osThreadAttr_t BalanceTask_attributes = {
   .name = "BalanceTask",
-  .stack_size = 128 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
 /* Definitions for SerialTask */
 osThreadId_t SerialTaskHandle;
 const osThreadAttr_t SerialTask_attributes = {
   .name = "SerialTask",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 

@@ -14,17 +14,18 @@ static const uint32_t RP_ADC_CHANNELS[RP_CHANNELS] = {
 };
 
 /**
- * @brief 初始化RP模块，覆盖CubeMX的扫描模式为单通道模式
+ * @brief 初始化RP模块，关闭ADC2扫描模式
  * @note  ADC2无 DMA，扫描模式下EOC只在序列末尾置位一次，无法逐通道读取，
  *        因此关闭扫描模式，改为软件逐一通道转换。
+ *
+ *        直接操作 ADC 寄存器避免重复调用 HAL_ADC_Init（会导致第二次 MspInit，
+ *        重复配置 GPIO 时钟和 NVIC）。
  */
 void RP_Init(void) {
-    /* 禁用扫描转换模式，ADC每次仅转换单个通道 */
-    hadc2.Init.ScanConvMode = DISABLE;
-    /* 设置转换数量为1，即单次转换 */
-    hadc2.Init.NbrOfConversion = 1;
-    /* 调用HAL库初始化ADC2，使上述配置生效 */
-    HAL_ADC_Init(&hadc2);
+    /* 禁用扫描转换模式（CR1 寄存器的 SCAN 位） */
+    CLEAR_BIT(hadc2.Instance->CR1, ADC_CR1_SCAN);
+    /* 规则序列长度设为 1（SQR1 寄存器的 L[3:0] 域 = 0） */
+    CLEAR_BIT(hadc2.Instance->SQR1, ADC_SQR1_L);
 
     /* ADC 自校准 — 消除内部偏移误差，使读数准确覆盖 0~4095 */
     HAL_ADCEx_Calibration_Start(&hadc2);
@@ -49,15 +50,20 @@ void RP_ReadAll(RP_Data *data, uint8_t n) {
         sConfig.Channel = RP_ADC_CHANNELS[i];
         /* 设置通道转换为规则组第1优先级 */
         sConfig.Rank = ADC_REGULAR_RANK_1;
-        /* 设置采样时间为1.5个ADC时钟周期 */
-        sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+        /* 设置采样时间为13.5个ADC时钟周期（适配高阻抗电位器） */
+        sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
         /* 将通道配置应用到ADC2 */
         HAL_ADC_ConfigChannel(&hadc2, &sConfig);
 
         /* 启动ADC2转换 */
         HAL_ADC_Start(&hadc2);
-        /* 等待ADC转换完成（阻塞式，最大超时等待） */
-        HAL_ADC_PollForConversion(&hadc2, HAL_MAX_DELAY);
+        /* 等待ADC转换完成（100ms 超时，防止硬件故障死锁） */
+        if (HAL_ADC_PollForConversion(&hadc2, 100) != HAL_OK) {
+            HAL_ADC_Stop(&hadc2);
+            data->raw[i] = 0;
+            data->percent[i] = 0.0f;
+            continue;
+        }
         /* 读取ADC转换原始值（12位分辨率，范围0~4095） */
         uint16_t raw = HAL_ADC_GetValue(&hadc2);
         /* 停止ADC2转换 */

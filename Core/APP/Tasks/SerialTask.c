@@ -1,21 +1,16 @@
 //
 // Created by G on 2026/6/16.
-// 串口任务 — 每 20ms 发送 PWM 和速度数据
+// SerialTask — 串口调试输出任务
+// 周期 20ms，优先级 Low
+// 格式：Kp,Ki,Kd,Target,Actual,Out（CSV，可直接用串口波形软件绘图）
 //
 
 #include "cmsis_os.h"
 #include "usart.h"
 #include <stdio.h>
 
-/* -------------------------------------------------------------------------- */
-/* 外部变量（来自 BalanceTask）                                                  */
-/* -------------------------------------------------------------------------- */
-extern int16_t g_pwm;
-extern int16_t g_speed;
+extern volatile float Target, Actual, Out;
 
-/* -------------------------------------------------------------------------- */
-/* 串口任务入口（优先级 Low）                                                    */
-/* -------------------------------------------------------------------------- */
 void StartSerialTask(void *argument)
 {
     (void)argument;
@@ -24,10 +19,11 @@ void StartSerialTask(void *argument)
 
     for (;;) {
         int len = sprintf(tx_buf,
-            "%d,%d\r\n",
-            g_pwm,
-            g_speed);
-        HAL_UART_Transmit(&huart1, (uint8_t *)tx_buf, len, HAL_MAX_DELAY);
+            "%.0f,%.0f,%.0f\r\n",
+            (double)Target,
+            (double)Actual,
+            (double)Out);
+        HAL_UART_Transmit(&huart1, (uint8_t *)tx_buf, len, 100);
 
         osDelay(20);
     }
