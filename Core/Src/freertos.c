@@ -54,10 +54,10 @@ const osThreadAttr_t UITask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for ControlTask */
-osThreadId_t ControlTaskHandle;
-const osThreadAttr_t ControlTask_attributes = {
-  .name = "ControlTask",
+/* Definitions for BalanceTask */
+osThreadId_t BalanceTaskHandle;
+const osThreadAttr_t BalanceTask_attributes = {
+  .name = "BalanceTask",
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
@@ -75,7 +75,7 @@ const osThreadAttr_t SerialTask_attributes = {
 /* USER CODE END FunctionPrototypes */
 
 void StartUITask(void *argument);
-extern void StartControlTask(void *argument);
+extern void StartBalanceTask(void *argument);
 extern void StartSerialTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -110,8 +110,8 @@ void MX_FREERTOS_Init(void) {
   /* creation of UITask */
   UITaskHandle = osThreadNew(StartUITask, NULL, &UITask_attributes);
 
-  /* creation of ControlTask */
-  ControlTaskHandle = osThreadNew(StartControlTask, NULL, &ControlTask_attributes);
+  /* creation of BalanceTask */
+  BalanceTaskHandle = osThreadNew(StartBalanceTask, NULL, &BalanceTask_attributes);
 
   /* creation of SerialTask */
   SerialTaskHandle = osThreadNew(StartSerialTask, NULL, &SerialTask_attributes);

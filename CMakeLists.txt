@@ -46,7 +46,7 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/BSP/encoder.c
         Core/BSP/encoder.h
         Core/APP/Tasks/UITask.c
-        Core/APP/Tasks/ControlTask.c
+        Core/APP/Tasks/BalanceTask.c
         Core/APP/Tasks/SerialTask.c
 )
 
