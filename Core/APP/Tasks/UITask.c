@@ -60,13 +60,14 @@ void StartUITask(void *argument)
         /* ---- 电机子菜单 ---- */
         case STATE_MENU_MOTOR:
             OLED_PrintASCIIString(0, 0,  "  MOTOR  MODE  ", &afont16x8, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(0, 32, "K1: Speed      ", &afont16x8, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(0, 48, "K2: Position   ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 16, "K1: Speed      ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 32, "K2: Position   ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 48, "K3: Back       ", &afont16x8, OLED_COLOR_NORMAL);
             break;
 
         /* ---- 定速模式 ---- */
         case STATE_MOTOR_SPEED:
-            OLED_PrintASCIIString(0, 0, "SPEED", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 0, "     SPEED     ", &afont16x8, OLED_COLOR_NORMAL);
             sprintf(line, "Kp:%.2f", (double)kp);
             OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
             sprintf(line, "Ki:%.2f", (double)ki);
@@ -83,7 +84,7 @@ void StartUITask(void *argument)
 
         /* ---- 定位模式 ---- */
         case STATE_MOTOR_POSITION:
-            OLED_PrintASCIIString(0, 0, "POS", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 0, "      POS      ", &afont16x8, OLED_COLOR_NORMAL);
             sprintf(line, "Kp:%.2f", (double)kp);
             OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
             sprintf(line, "Ki:%.2f", (double)ki);
@@ -107,7 +108,7 @@ void StartUITask(void *argument)
 
         /* ---- 调参模式 ---- */
         case STATE_DEBUG:
-            OLED_PrintASCIIString(0, 0, "TUNE", &afont16x8, OLED_COLOR_REVERSED);
+            OLED_PrintASCIIString(0, 0, "     TUNE      ", &afont16x8, OLED_COLOR_REVERSED);
             sprintf(line, "Kp:%.2f", (double)kp);
             OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
             sprintf(line, "Ki:%.2f", (double)ki);
