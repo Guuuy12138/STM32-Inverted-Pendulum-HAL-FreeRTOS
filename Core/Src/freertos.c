@@ -54,12 +54,12 @@ const osThreadAttr_t UITask_attributes = {
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for BalanceTask */
-osThreadId_t BalanceTaskHandle;
-const osThreadAttr_t BalanceTask_attributes = {
-  .name = "BalanceTask",
+/* Definitions for MotorTask */
+osThreadId_t MotorTaskHandle;
+const osThreadAttr_t MotorTask_attributes = {
+  .name = "MotorTask",
   .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityHigh,
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for SerialTask */
 osThreadId_t SerialTaskHandle;
@@ -68,6 +68,18 @@ const osThreadAttr_t SerialTask_attributes = {
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for FsmTask */
+osThreadId_t FsmTaskHandle;
+const osThreadAttr_t FsmTask_attributes = {
+  .name = "FsmTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
+};
+/* Definitions for motorCmdQueue */
+osMessageQueueId_t motorCmdQueueHandle;
+const osMessageQueueAttr_t motorCmdQueue_attributes = {
+  .name = "motorCmdQueue"
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -75,8 +87,9 @@ const osThreadAttr_t SerialTask_attributes = {
 /* USER CODE END FunctionPrototypes */
 
 void StartUITask(void *argument);
-extern void StartBalanceTask(void *argument);
+extern void StartMotorTask(void *argument);
 extern void StartSerialTask(void *argument);
+extern void StartFsmTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -102,6 +115,10 @@ void MX_FREERTOS_Init(void) {
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
+  /* Create the queue(s) */
+  /* creation of motorCmdQueue */
+  motorCmdQueueHandle = osMessageQueueNew (8, 16, &motorCmdQueue_attributes);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -110,11 +127,14 @@ void MX_FREERTOS_Init(void) {
   /* creation of UITask */
   UITaskHandle = osThreadNew(StartUITask, NULL, &UITask_attributes);
 
-  /* creation of BalanceTask */
-  BalanceTaskHandle = osThreadNew(StartBalanceTask, NULL, &BalanceTask_attributes);
+  /* creation of MotorTask */
+  MotorTaskHandle = osThreadNew(StartMotorTask, NULL, &MotorTask_attributes);
 
   /* creation of SerialTask */
   SerialTaskHandle = osThreadNew(StartSerialTask, NULL, &SerialTask_attributes);
+
+  /* creation of FsmTask */
+  FsmTaskHandle = osThreadNew(StartFsmTask, NULL, &FsmTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

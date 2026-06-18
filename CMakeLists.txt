@@ -45,8 +45,11 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/BSP/key.h
         Core/BSP/encoder.c
         Core/BSP/encoder.h
+        Core/APP/fsm.c
+        Core/APP/fsm.h
+        Core/APP/Tasks/FsmTask.c
         Core/APP/Tasks/UITask.c
-        Core/APP/Tasks/BalanceTask.c
+        Core/APP/Tasks/MotorTask.c
         Core/APP/Tasks/SerialTask.c
         Core/APP/Types/appType.h
 )
@@ -69,6 +72,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     Core/BSP
     Core/Algorithm
+    Core/APP
 )
 
 # Add project symbols (macros)
