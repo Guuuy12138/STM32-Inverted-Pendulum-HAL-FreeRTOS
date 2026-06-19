@@ -5,7 +5,7 @@
 //
 // ============================== 输出格式 ==============================
 //   USART1，波特率由 CubeMX 配置
-//   格式：Target,Actual,Out（CSV，每行一个采样点）
+//   格式：Target,Actual,Out,ErrorInt（CSV，每行一个采样点）
 //   M=5：STATE_DEBUG（调参模式），其他状态不输出
 //   用途：直接粘贴到串口波形软件（如 VOFA+ / SerialPlot）绘制 PID 响应曲线。
 //
@@ -28,10 +28,11 @@ void StartSerialTask(void *argument)
         /* 仅调参模式下发送串口数据，其他模式空转节省资源 */
         if (current_state == STATE_DEBUG) {
             int len = sprintf(tx_buf,
-                "%.0f,%.0f,%.0f\r\n",
+                "%.0f,%.0f,%.0f,%.0f\r\n",
                 (double)Target,
                 (double)Actual,
-                (double)Out);
+                (double)Out,
+                (double)ErrorInt);
             HAL_UART_Transmit(&huart1, (uint8_t *)tx_buf, len, 100);
         }
 

@@ -142,6 +142,12 @@ void PID_Init(PID_TypeDef *pid, float Kp, float Ki, float Kd,
      *     outMax=1000, outMin=-1000  → 条件为真 → ErrorIntMax = 1000-(-1000) = 2000
      *     outMax=0,    outMin=0      → 条件为假 → ErrorIntMax = 1.0（兜底保护） */
     pid->ErrorIntMax = (outMax > outMin) ? (outMax - outMin) : 1.0f;
+
+    /* 积分分离默认值：
+     *   - 默认关闭，向后兼容现有速度环
+     *   - 阈值预设为 40，防止开启分离后因阈值为 0 导致积分永远不触发 */
+    pid->SeparationEnabled   = 0;
+    pid->SeparationThreshold = 40.0f;
 }
 
 /**
@@ -223,15 +229,24 @@ static float PID_PositionalCore(PID_TypeDef *pid, float actual)
      * 负值 = 实际值高于目标值（需要减速 / 反向输出） */
     pid->Error0 = pid->target - actual;
 
-    /* ---- Step 2: 累加积分 ----
+    /* ---- Step 2: 累加积分（支持积分分离）----
      * 积分项的作用：消除稳态误差。
      * 例如：当 P 项输出不足以克服摩擦力时，即使误差很小且不变，
      * 积分项也会随时间慢慢增大，最终消除这个"顽固"误差。
      *
      * 必须对积分做限幅，否则在输出饱和期间积分会一直累加，
-     * 导致退出饱和时需要很长时间才能"退出来"（积分饱和 / windup）。 */
-    pid->ErrorInt += pid->Error0;
-    pid->ErrorInt  = CLAMP(pid->ErrorInt, -pid->ErrorIntMax, pid->ErrorIntMax);
+     * 导致退出饱和时需要很长时间才能"退出来"（积分饱和 / windup）。
+     *
+     * 积分分离（Integral Separation）：
+     *   当 SeparationEnabled=1 且 |error| > SeparationThreshold 时，
+     *   跳过积分累加（冻结积分，不清零）。误差进入阈值范围后再恢复累加。
+     *   作用：大幅调位时避免积分累积过多造成超调，接近目标时才启用积分消除静差。 */
+    if (!pid->SeparationEnabled ||
+        (pid->Error0 >= -pid->SeparationThreshold &&
+         pid->Error0 <=  pid->SeparationThreshold)) {
+        pid->ErrorInt += pid->Error0;
+        pid->ErrorInt  = CLAMP(pid->ErrorInt, -pid->ErrorIntMax, pid->ErrorIntMax);
+    }
 
     /* ---- Step 3: 位置式 PID 公式 ----
      * P 项 = Kp × 当前误差           → 即时响应
@@ -254,10 +269,17 @@ static float PID_PositionalCore(PID_TypeDef *pid, float actual)
      * 为什么不是"到了限幅就清零积分"？
      *   清零方式太粗暴，会导致积分作用完全消失。
      *   往回减掉本次误差的方式更平滑：如果误差还在同方向推就减掉，
-     *   一旦误差反向（退出饱和的迹象），积分开始正常累加。 */
+     *   一旦误差反向（退出饱和的迹象），积分开始正常累加。
+     *
+     * 注意：只有本周期在 Step 2 中确实累加了积分，才允许撤回。
+     *        如果积分分离导致本周期跳过了累加，这里也跳过撤回。 */
     if ((output >= pid->outMax && pid->Error0 > 0.0f) ||
         (output <= pid->outMin && pid->Error0 < 0.0f)) {
-        pid->ErrorInt -= pid->Error0;
+        if (!pid->SeparationEnabled ||
+            (pid->Error0 >= -pid->SeparationThreshold &&
+             pid->Error0 <=  pid->SeparationThreshold)) {
+            pid->ErrorInt -= pid->Error0;
+        }
     }
 
     /* ---- Step 6: 保存历史误差 ----

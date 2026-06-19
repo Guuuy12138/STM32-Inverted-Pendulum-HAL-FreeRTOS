@@ -31,6 +31,9 @@ typedef struct {
     float outMax;      /**< 输出上限 */
     float outMin;      /**< 输出下限 */
     float ErrorIntMax; /**< 积分限幅上限（位置式 PID 抗饱和） */
+
+    uint8_t SeparationEnabled;   /**< 积分分离开关：0=关闭（默认），1=开启 */
+    float   SeparationThreshold; /**< 积分分离阈值：|error| ≤ 此值时才累加积分 */
 } PID_TypeDef;
 
 /* -------------------------------------------------------------------------- */

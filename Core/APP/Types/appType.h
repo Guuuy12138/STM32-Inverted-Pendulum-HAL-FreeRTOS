@@ -69,5 +69,6 @@ extern volatile float    Kd;             /**< PID 微分系数 */
 extern volatile float    Target;         /**< 目标值（counts/周期） */
 extern volatile float    Actual;         /**< 实际测量值（counts/周期） */
 extern volatile float    Out;            /**< PID 输出（PWM 占空比） */
+extern volatile float    ErrorInt;       /**< PID 误差积分 Σe */
 
 #endif //STM32_INVERTED_PENDULUM_APPTYPE_H

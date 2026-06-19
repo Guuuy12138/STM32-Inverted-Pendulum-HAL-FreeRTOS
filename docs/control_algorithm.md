@@ -27,6 +27,46 @@ The algorithm layer provides 4 PID control functions, covering common embedded c
 
 ---
 
+## Integral Separation
+
+### Overview
+
+积分分离（Integral Separation）用于解决位置环 PID 的矛盾：
+- **不加 I**：PD 控制无法消除稳态误差（通常差 5~10 个计数）
+- **加 I**：大范围调位时积分累积过多，导致超调
+
+积分分离的做法：误差大时冻结积分（只用 PD），误差进入阈值范围后启用积分（PID）。
+
+### Configuration
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `SeparationEnabled` | `uint8_t` | 0 = 关闭（默认），积分永远累加；1 = 开启积分分离 |
+| `SeparationThreshold` | `float` | 误差阈值：`\|error\| ≤ threshold` 时才累加积分 |
+
+### Usage
+
+```c
+PID_Init(&pid_position, Kp, Ki, Kd, 100, -100);
+pid_position.SeparationEnabled   = 1;      // 启用积分分离
+pid_position.SeparationThreshold = 40.0f;  // 阈值 40（目标范围 400 的 10%）
+```
+
+### Behavior
+
+- `SeparationEnabled = 0` 或 `|error| ≤ SeparationThreshold`：积分正常累加
+- `SeparationEnabled = 1` 且 `|error| > SeparationThreshold`：积分**冻结**（不累加，但也不清零）
+- 冻结期间如果输出饱和，抗饱和逻辑同步跳过（不会撤回未累加的积分）
+
+### Notes
+
+- 只影响位置式 PID（`PID_PositionalCore`），增量式 PID 无内部积分累加器
+- 速度环默认不启用（`SeparationEnabled = 0`），保持原有行为
+- 阈值过小（< 稳态误差）会导致积分永远不触发，静差无法消除
+- 阈值过大（接近目标范围上限）等同于关闭积分分离
+
+---
+
 ## PID_TypeDef Structure
 
 ```c
@@ -42,9 +82,12 @@ typedef struct {
     float ErrorInt;    // Error integral Σe (positional PID)
     float Error2;      // Error e(k-2) (incremental PID)
 
-    float outMax;      // Output upper limit
-    float outMin;      // Output lower limit
-    float ErrorIntMax; // Integral clamp threshold
+    float outMax;               // Output upper limit
+    float outMin;               // Output lower limit
+    float ErrorIntMax;          // Integral clamp threshold
+
+    uint8_t SeparationEnabled;  // 0=disabled (default), 1=enabled
+    float   SeparationThreshold;// |error| ≤ threshold → integral active
 } PID_TypeDef;
 ```
 

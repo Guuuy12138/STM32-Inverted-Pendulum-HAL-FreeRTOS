@@ -20,8 +20,8 @@
 #define FIXED_KP_SPEED      0.35f
 #define FIXED_KI_SPEED      0.45f
 #define FIXED_KD_SPEED      0.0f
-#define FIXED_KP_POS        0.5f
-#define FIXED_KI_POS        0.01f
+#define FIXED_KP_POS        0.45f
+#define FIXED_KI_POS        0.08f
 #define FIXED_KD_POS        0.2f
 
 /* ---- 限幅 ---- */
@@ -48,6 +48,7 @@ volatile float    Kd       = FIXED_KD_SPEED;
 volatile float    Target   = 0.0f;
 volatile float    Actual   = 0.0f;
 volatile float    Out      = 0.0f;
+volatile float    ErrorInt = 0.0f;
 
 /* ========================================================================== */
 /* 任务入口                                                                    */
@@ -66,6 +67,11 @@ void StartMotorTask(void *argument)
     static PID_TypeDef pid_position;
     PID_Init(&pid_speed,    FIXED_KP_SPEED, FIXED_KI_SPEED, FIXED_KD_SPEED, 100, -100);
     PID_Init(&pid_position, FIXED_KP_POS,   FIXED_KI_POS,   FIXED_KD_POS,   100, -100);
+
+    /* 位置环启用积分分离：|error| > 40 时冻结积分（避免超调），
+     * |error| ≤ 40 时启用积分（消除静差） */
+    pid_position.SeparationEnabled   = 1;
+    pid_position.SeparationThreshold = 40.0f;
 
     /* ---- 运行时状态 ---- */
     static uint8_t  sub_mode      = SUB_IDLE;
@@ -196,10 +202,12 @@ void StartMotorTask(void *argument)
             Actual = (float)delta;
             PID_SetTarget(pid, Target);
             Out = PID_PositionalSpeed(pid, Actual);
+            ErrorInt = pid->ErrorInt;
         } else if (sub_mode == SUB_POSITION) {
             Actual = (float)location;        // 累计位置
             PID_SetTarget(pid, Target);
             Out = PID_PositionalPosition(pid, Actual);
+            ErrorInt = pid->ErrorInt;
         } else {
             // IDLE — 保持停转，让 Actual 显示 0
             Out    = 0.0f;
