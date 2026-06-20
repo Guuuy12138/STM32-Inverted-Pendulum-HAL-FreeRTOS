@@ -6,7 +6,7 @@
 #ifndef STM32_INVERTED_PENDULUM_FSM_H
 #define STM32_INVERTED_PENDULUM_FSM_H
 
-#include "Types/appType.h"
+#include "../Types/appType.h"
 
 /* ---- 状态转移表维度 ---- */
 #define STATE_COUNT  6

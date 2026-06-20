@@ -421,52 +421,86 @@ STM32-Inverted-Pendulum/
 
 ### Introduction
 
-This project is based on STM32F103C8T6, STM32 HAL, and FreeRTOS (CMSIS-RTOS V2). It is a learning platform for embedded software architecture and PID control algorithms.
+This project is built on the **STM32F103C8T6** (72 MHz, 64 KB Flash, 20 KB SRAM) using **STM32 HAL** and **FreeRTOS** (CMSIS-RTOS V2). It serves as a hands-on platform for practicing modern embedded software architecture and closed-loop control algorithms.
 
-**Current stage:** Motor speed + position closed-loop control with hierarchical menu system.  
-**Future stage:** Inverted pendulum control system.
+The hardware is a PID starter kit. The current milestone is a **motor PI/PID speed + position closed-loop controller** with a hierarchical menu system, deliberately structured so the same scaffolding can host the **inverted pendulum** controller in a later stage.
 
-Supported operating modes:
+**Current stage:** Motor speed + position closed-loop control with hierarchical menu system.
+**Future stage:** Inverted pendulum control system (cascade PID).
 
-- **SPEED Mode** — Fixed-PID speed control, K1/K2 adjust target, K3 emergency stop
-- **POSITION Mode** — Fixed-PID position control, RP4 potentiometer real-time target ("point and shoot")
-- **TUNE / DEBUG Mode** — Long-press K4 from any running state to enter, RP1~4 adjust Kp/Ki/Kd/Target with 50Hz CSV serial output
+Three operating modes are exposed through the menu:
+
+- **SPEED Mode** — Fixed-PID speed control. K1/K2 step the target speed (±10 counts/period, clamped to ±150), K3 is an emergency stop. Uses `PID_PositionalSpeed()`.
+- **POSITION Mode** — Fixed-PID position control. The RP4 potentiometer directly drives the target position (±400 counts, "point and shoot"); K1/K2/K3 are masked to avoid conflicting with the knob. Uses `PID_PositionalPosition()` with **integral separation** enabled.
+- **TUNE / DEBUG Mode** — Reached by long-pressing K4 (~2 s) from any running state. RP1–RP4 live-tune Kp / Ki / Kd / Target while the motor keeps running, and USART1 streams CSV telemetry at 50 Hz for waveform tools (VOFA+ / SerialPlot). Exiting restores the parameters and target captured on entry.
 
 ### Architecture
 
+A four-layer design keeps decision, math, drivers, and HAL cleanly separated. Each layer only calls downward:
+
 ```text
 APP                  — FsmTask / MotorTask / PendulumTask / UITask / SerialTask
-                       FSM (table-driven state machine + debug return stack)
-Algorithm            — PID (positional / incremental × speed / position)
-BSP                  — TB6612 / Encoder / OLED / Key / RP
-HAL                  — TIM / ADC / I2C / USART / GPIO
+                       FSM (table-driven hierarchical state machine + DEBUG return stack)
+Algorithm            — PID (positional / incremental × speed / position, with anti-windup & integral separation)
+BSP                  — TB6612 / Encoder / OLED / Key / RP / Font
+HAL                  — TIM / ADC / I2C / USART / GPIO (CubeMX-generated)
+```
+
+Key rule enforced in comments: **decision tasks do not touch hardware, and the control task does not scan inputs** — `FsmTask` only reads buttons/pots and dispatches commands; `MotorTask` only receives commands and drives the motor.
+
+### State Machine
+
+`fsm.c` encodes all transitions in a single `const` table stored in flash (`STATE_COUNT × EVT_COUNT`), with a dedicated return stack for the DEBUG mode so it can be entered from *any* running state and return to exactly that state on exit. Six states × five events = 30 rules in one place, no nested `switch` ladders.
+
+```text
+MENU_MAIN ──K1──→ MENU_MOTOR ──K1──→ MOTOR_SPEED ──K4L──→ DEBUG
+   │ K2              │ K2              │ K4S ←──┘         │ K4L
+   ▼                 ▼                 ▼         push/pop ▼
+PENDULUM      MOTOR_POSITION     MOTOR_SPEED ←────── return to caller state
+   │ K3              │ K4S
+   └──→ MENU_MAIN ←──┘
 ```
 
 ### Task Design
 
 | Task | Priority | Period | Function |
 | ---- | -------- | ------ | -------- |
-| FsmTask | `osPriorityHigh` | 20ms (50Hz) | Button scan → FSM dispatch → send MotorCmd via queue; RP read in DEBUG mode |
-| MotorTask | `osPriorityNormal` | 40ms (25Hz) | Receive MotorCmd → speed/position PID → PWM motor drive |
-| PendulumTask | `osPriorityHigh` | — | Placeholder for inverted pendulum control |
-| UITask | `osPriorityLow` | 100ms (10Hz) | OLED render: menu / running / tuning screens |
-| SerialTask | `osPriorityLow` | 20ms (50Hz) | DEBUG mode 50Hz CSV output (`Target,Actual,Out,ErrorInt`) for waveform tools |
+| FsmTask | `osPriorityHigh` | 20ms (50Hz) | Scan K1–K4 (debounced click + K4 long-press timing) → FSM dispatch → send `MotorCmd` via queue; read RP1–RP4 in POSITION/DEBUG modes |
+| MotorTask | `osPriorityNormal` | 40ms (25Hz) | Drain `MotorCmd` queue → run speed/position PID → map output to PWM via TB6612; maintain the shared display globals |
+| PendulumTask | `osPriorityHigh` | — | Placeholder for inverted pendulum control (idle loop, to be implemented) |
+| UITask | `osPriorityLow` | 100ms (10Hz) | Snapshot shared globals → render menu / running / tuning screens on OLED (framebuffer, I²C) |
+| SerialTask | `osPriorityLow` | 20ms (50Hz) | In DEBUG mode only, emit 50Hz CSV `Target,Actual,Out,ErrorInt\r\n`; idle otherwise to save CPU |
 
-Inter-task communication: **message queue** for FsmTask → MotorTask commands; **volatile globals** for MotorTask → UITask/SerialTask display data (zero-copy).
+**Inter-task communication** mixes two patterns by data shape:
+
+- **Message queue** (`motorCmdQueue`, 8 × 16 B) for FsmTask → MotorTask *commands* — guarantees no button event is lost, decouples producer (50 Hz) from consumer (25 Hz).
+- **`volatile` globals** (`speed`, `location`, `Kp/Ki/Kd`, `Target`, `Actual`, `Out`, `ErrorInt`) for MotorTask → UITask/SerialTask *display data* — single writer, zero-copy, no lock overhead.
+
+### Control Algorithm
+
+The speed loop runs PI (Kd = 0) at 25 Hz; the encoder is read in hardware via TIM3 encoder mode and the per-period delta is the feedback. The position loop adds **integral separation**: when `|error| > 40` the integrator is frozen (P+D only, fast approach, no overshoot), and once inside the threshold the integral engages to cancel the residual steady-state error. Positional PID also guards against windup with both output clamping and *conditional integration* (back out the just-added integral term when the output is saturated and the error keeps pushing the same way). The incremental PID variants are implemented too and reserved for future cascade use.
 
 ### Quick Start
 
-- **Toolchain:** `arm-none-eabi-gcc` (or Clang via `starm-clang.cmake`)
-- **Build:** `cmake --preset Debug && cmake --build build/Debug`
+- **Toolchain:** `arm-none-eabi-gcc` on PATH (or Clang via `cmake/starm-clang.cmake`)
+- **Build:**
+  ```bash
+  cmake --preset Debug && cmake --build build/Debug
+  # release:
+  cmake --preset Release && cmake --build build/Release
+  ```
 - **Flash:** ST-LINK / J-Link via STM32CubeProgrammer or OpenOCD
-- **Serial:** USART1, 115200 8N1
+  ```bash
+  STM32_Programmer_CLI -c port=SWD -w build/Debug/STM32-Inverted-Pendulum.elf -rst
+  ```
+- **Serial:** USART1, 115200 8N1 (CSV telemetry in DEBUG mode)
 
 ### Usage
 
 - **Main Menu:** K1 → Motor, K2 → Pendulum (placeholder)
 - **Motor Menu:** K1 → Speed, K2 → Position, K3 → Back
-- **SPEED Mode:** K1/K2 adjust target (±10), K3 stop, K4 short → back, K4 long → DEBUG
-- **POSITION Mode:** RP4 knob sets target position (±400), K4 short → back, K4 long → DEBUG
-- **DEBUG Mode:** RP1~4 adjust Kp/Ki/Kd/Target; K4 long → exit & restore previous params
-- **Serial output:** 50Hz CSV (`Target,Actual,Out,ErrorInt`) for VOFA+ / SerialPlot (DEBUG mode only)
-- Detailed docs: [`docs/control_algorithm.md`](docs/control_algorithm.md)
+- **SPEED Mode:** K1/K2 adjust target (±10, clamp ±150), K3 emergency stop, K4 short → back, K4 long → DEBUG
+- **POSITION Mode:** RP4 knob sets target position (±400), K1/K2/K3 masked, K4 short → back, K4 long → DEBUG
+- **DEBUG Mode:** RP1–RP4 adjust Kp/Ki/Kd/Target live; K4 long → exit and restore previous parameters & target
+- **Serial output:** 50Hz CSV (`Target,Actual,Out,ErrorInt`) for VOFA+ / SerialPlot — visibly shows the integrator freezing (flat) far from target and engaging near target to kill steady-state error
+- Detailed algorithm reference: [`docs/control_algorithm.md`](docs/control_algorithm.md)
