@@ -21,12 +21,15 @@
 #define FIXED_KI_SPEED      0.45f
 #define FIXED_KD_SPEED      0.0f
 #define FIXED_KP_POS        0.45f
-#define FIXED_KI_POS        0.08f
+#define FIXED_KI_POS        0.0f   // 外环纯 PD：静差由内环速度 PI 消除
 #define FIXED_KD_POS        0.2f
 
 /* ---- 限幅 ---- */
 #define SPEED_TARGET_MAX    150.0f
 #define POS_TARGET_MAX      400.0f
+#define SPD_LIMIT_STEP      5.0f    // 速度上限每次加减步长
+#define SPD_LIMIT_DEFAULT   150.0f  // 速度上限默认值（= 全速）
+#define SPD_LIMIT_MIN       5.0f    // 速度上限最小值（不能为 0，否则电机不动）
 
 /* ---- 内部子模式 ---- */
 #define SUB_IDLE     0
@@ -49,6 +52,7 @@ volatile float    Target   = 0.0f;
 volatile float    Actual   = 0.0f;
 volatile float    Out      = 0.0f;
 volatile float    ErrorInt = 0.0f;
+volatile float    PosSpeedLimit = SPD_LIMIT_DEFAULT;
 
 /* ========================================================================== */
 /* 任务入口                                                                    */
@@ -67,11 +71,6 @@ void StartMotorTask(void *argument)
     static PID_TypeDef pid_position;
     PID_Init(&pid_speed,    FIXED_KP_SPEED, FIXED_KI_SPEED, FIXED_KD_SPEED, 100, -100);
     PID_Init(&pid_position, FIXED_KP_POS,   FIXED_KI_POS,   FIXED_KD_POS,   100, -100);
-
-    /* 位置环启用积分分离：|error| > 40 时冻结积分（避免超调），
-     * |error| ≤ 40 时启用积分（消除静差） */
-    pid_position.SeparationEnabled   = 1;
-    pid_position.SeparationThreshold = 40.0f;
 
     /* ---- 运行时状态 ---- */
     static uint8_t  sub_mode      = SUB_IDLE;
@@ -106,15 +105,25 @@ void StartMotorTask(void *argument)
                 location = 0;
                 break;
 
-            /* ---- 进入定位模式 ---- */
+            /* ---- 进入定位模式（串级双环：外环位置 → 内环速度 → 电机）---- */
             case CMD_POSITION:
                 sub_mode = SUB_POSITION;
                 pid = &pid_position;
-                pid->Kp = Kp = FIXED_KP_POS;
-                pid->Ki = Ki = FIXED_KI_POS;
-                pid->Kd = Kd = FIXED_KD_POS;
+
+                /* 外环（位置）PID — 输出是速度指令，限幅 = 可调速度上限
+                   外环纯 PD（Ki=0）：静差由内环速度 PI 的积分项消除 */
+                PID_Init(&pid_position, FIXED_KP_POS, FIXED_KI_POS, FIXED_KD_POS,
+                         PosSpeedLimit, -PosSpeedLimit);
+
+                Kp = FIXED_KP_POS;
+                Ki = FIXED_KI_POS;
+                Kd = FIXED_KD_POS;
                 Target = 0;
-                PID_Clear(pid);
+
+                /* 内环（速度）PID — 复用速度模式下调好的参数，只清状态 */
+                PID_Clear(&pid_speed);
+
+                PID_Clear(&pid_position);
                 ENCODER_Reset();
                 ENCODER_GetDelta();  // 丢弃第一帧，同步 last_cnt
                 location = 0;
@@ -183,6 +192,26 @@ void StartMotorTask(void *argument)
                 break;
             }
 
+            /* ---- 速度上限上调 ---- */
+            case CMD_SPD_LIMIT_UP:
+                PosSpeedLimit += cmd.value1;
+                if (PosSpeedLimit > SPEED_TARGET_MAX) PosSpeedLimit = SPEED_TARGET_MAX;
+                if (sub_mode == SUB_POSITION) {
+                    pid_position.outMax =  PosSpeedLimit;
+                    pid_position.outMin = -PosSpeedLimit;
+                }
+                break;
+
+            /* ---- 速度上限下调 ---- */
+            case CMD_SPD_LIMIT_DOWN:
+                PosSpeedLimit -= cmd.value1;
+                if (PosSpeedLimit < SPD_LIMIT_MIN) PosSpeedLimit = SPD_LIMIT_MIN;
+                if (sub_mode == SUB_POSITION) {
+                    pid_position.outMax =  PosSpeedLimit;
+                    pid_position.outMin = -PosSpeedLimit;
+                }
+                break;
+
             default:
                 break;
             }
@@ -204,10 +233,17 @@ void StartMotorTask(void *argument)
             Out = PID_PositionalSpeed(pid, Actual);
             ErrorInt = pid->ErrorInt;
         } else if (sub_mode == SUB_POSITION) {
-            Actual = (float)location;        // 累计位置
-            PID_SetTarget(pid, Target);
-            Out = PID_PositionalPosition(pid, Actual);
-            ErrorInt = pid->ErrorInt;
+            Actual = (float)location;                     // 外环反馈 = 累计位置
+
+            /* 外环（位置环）：位置误差 → 速度指令 */
+            PID_SetTarget(&pid_position, Target);
+            float speed_setpoint = PID_PositionalPosition(&pid_position, Actual);
+
+            /* 内环（速度环）：速度误差 → PWM */
+            PID_SetTarget(&pid_speed, speed_setpoint);
+            Out = PID_PositionalSpeed(&pid_speed, (float)delta);
+
+            ErrorInt = pid_position.ErrorInt;             // 显示外环积分
         } else {
             // IDLE — 保持停转，让 Actual 显示 0
             Out    = 0.0f;

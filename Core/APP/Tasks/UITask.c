@@ -42,6 +42,7 @@ void StartUITask(void *argument)
         int   state = current_state;
         float kp = Kp, ki = Ki, kd = Kd;
         float t  = Target, a = Actual, o = Out;
+        float spl = PosSpeedLimit;
         int32_t loc = location;
 
         /* ================================================================ */
@@ -84,7 +85,8 @@ void StartUITask(void *argument)
 
         /* ---- 定位模式 ---- */
         case STATE_MOTOR_POSITION:
-            OLED_PrintASCIIString(0, 0, "      POS      ", &afont16x8, OLED_COLOR_NORMAL);
+            sprintf(line, "POS SpdLim:%3.0f ", (double)spl);
+            OLED_PrintASCIIString(0, 0, line, &afont16x8, OLED_COLOR_NORMAL);
             sprintf(line, "Kp:%.2f", (double)kp);
             OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
             sprintf(line, "Ki:%.2f", (double)ki);
@@ -108,7 +110,8 @@ void StartUITask(void *argument)
 
         /* ---- 调参模式 ---- */
         case STATE_DEBUG:
-            OLED_PrintASCIIString(0, 0, "     TUNE      ", &afont16x8, OLED_COLOR_REVERSED);
+            sprintf(line, "TUNE SpdLim:%3.0f ", (double)spl);
+            OLED_PrintASCIIString(0, 0, line, &afont16x8, OLED_COLOR_REVERSED);
             sprintf(line, "Kp:%.2f", (double)kp);
             OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
             sprintf(line, "Ki:%.2f", (double)ki);

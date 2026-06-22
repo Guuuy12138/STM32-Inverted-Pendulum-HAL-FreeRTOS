@@ -45,8 +45,10 @@ typedef enum {
 #define CMD_DEBUG_EXIT   0x05  /**< 退出调参，恢复之前模式 */
 #define CMD_UPDATE_TGT   0x06  /**< 更新目标值（旋钮调节） */
 #define CMD_UPDATE_PID   0x07  /**< 更新 Kp/Ki/Kd（旋钮调节） */
-#define CMD_ADJUST_UP    0x08  /**< 目标值 + 步长（按键调节） */
-#define CMD_ADJUST_DOWN  0x09  /**< 目标值 - 步长（按键调节） */
+#define CMD_ADJUST_UP        0x08  /**< 目标值 + 步长（按键调节） */
+#define CMD_ADJUST_DOWN      0x09  /**< 目标值 - 步长（按键调节） */
+#define CMD_SPD_LIMIT_UP     0x0A  /**< 速度上限 + 步长（按键调节） */
+#define CMD_SPD_LIMIT_DOWN   0x0B  /**< 速度上限 - 步长（按键调节） */
 
 /** @brief 消息结构体（16 字节，与队列 Item Size 一致） */
 typedef struct {
@@ -70,5 +72,6 @@ extern volatile float    Target;         /**< 目标值（counts/周期） */
 extern volatile float    Actual;         /**< 实际测量值（counts/周期） */
 extern volatile float    Out;            /**< PID 输出（PWM 占空比） */
 extern volatile float    ErrorInt;       /**< PID 误差积分 Σe */
+extern volatile float    PosSpeedLimit;  /**< 位置模式速度上限 */
 
 #endif //STM32_INVERTED_PENDULUM_APPTYPE_H

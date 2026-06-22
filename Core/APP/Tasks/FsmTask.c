@@ -25,6 +25,7 @@
 #define TARGET_MAX    150.0f
 
 #define SPEED_STEP       10.0f
+#define SPD_LIMIT_STEP   5.0f     // 速度上限每次加减步长
 #define POS_TARGET_MAX   400.0f   // 定位模式旋钮映射上限（与 MotorTask 保持一致）
 
 /* ---- 长按阈值 ---- */
@@ -175,6 +176,10 @@ void StartFsmTask(void *argument)
             float tgt = (rp_data.percent[3] - 50.0f) / 50.0f * tgt_limit;
             send_cmd(CMD_UPDATE_PID, kp, ki, kd);
             send_cmd(CMD_UPDATE_TGT, tgt, 0, 0);
+
+            /* K1/K2 调节速度上限 */
+            if (k1_click) send_cmd(CMD_SPD_LIMIT_UP,   SPD_LIMIT_STEP, 0, 0);
+            if (k2_click) send_cmd(CMD_SPD_LIMIT_DOWN, SPD_LIMIT_STEP, 0, 0);
         }
 
         osDelay(20);
