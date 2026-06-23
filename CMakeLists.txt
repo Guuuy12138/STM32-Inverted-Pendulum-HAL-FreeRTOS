@@ -47,7 +47,7 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/BSP/encoder.h
         Core/APP/Fsm/fsm.c
         Core/APP/Fsm/fsm.h
-        Core/APP/Tasks/FsmTask.c
+        Core/APP/Fsm/FsmTask.c
         Core/APP/Tasks/UITask.c
         Core/APP/Tasks/MotorTask.c
         Core/APP/Tasks/SerialTask.c

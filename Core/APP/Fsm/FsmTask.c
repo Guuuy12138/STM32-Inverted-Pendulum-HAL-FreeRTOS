@@ -16,7 +16,7 @@
 #include "key.h"
 #include "rp.h"
 #include "main.h"
-#include "../Fsm/fsm.h"
+#include "fsm.h"
 
 /* ---- 电机参数宏 ---- */
 #define KP_MAX        2.0f
