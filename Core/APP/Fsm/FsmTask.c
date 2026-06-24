@@ -222,6 +222,9 @@ void StartFsmTask(void *argument)
         /* K4 用 KEY_IsPressed——读原始 GPIO 电平，用于长按计时。             */
         /* ================================================================ */
 
+        /* bool 型变量只存 true（真）或 false（假），相当于一个开关量标志。
+           功能上与 int 一样（函数返回的本来就是 0/1），但用 bool 一眼就能看出
+           "这是个真假判断，不是存数值的"。这是给人读的，编译器不关心区别。 */
         bool k1_click = KEY_IsClicked(KEY_1);
         bool k2_click = KEY_IsClicked(KEY_2);
         bool k3_click = KEY_IsClicked(KEY_3);
