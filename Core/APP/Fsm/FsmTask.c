@@ -120,6 +120,9 @@
 
 extern osMessageQueueId_t motorCmdQueueHandle;
 
+/** @brief 进入 DEBUG 前的状态（全局，供 UITask 分流显示） */
+volatile int debug_origin_state = STATE_MENU_MAIN;
+
 /* ========================================================================== */
 /* 内部辅助函数                                                                  */
 /* ========================================================================== */
@@ -205,7 +208,6 @@ void StartFsmTask(void *argument)
     /* ---- 周期内的持久状态（static 保证跨周期保持）---- */
     static uint8_t   key4_hold_cnt = 0;                  // K4 按下计数器（0 = 未按下）
     static RP_Data   rp_data;                            // 电位器读数缓存
-    static AppState  pre_debug_state = STATE_MENU_MAIN;   // 记录从哪个模式进入 DEBUG
 
     /* 开机确保电机停转，防止复位后意外转动 */
     send_cmd(CMD_STOP, 0, 0, 0);
@@ -295,6 +297,7 @@ void StartFsmTask(void *argument)
             /*
              * 离开运行态回到菜单或切换模式 → 刹停电机。
              * 例外：进入 DEBUG 不刹停——电机继续跑，方便在线调参观察效果。
+             *       进入 TEST 不刹停——测试沙盒，电机不应在跑。
              */
             if ((prev_state == STATE_MOTOR_SPEED || prev_state == STATE_MOTOR_POSITION)
                 && new_state != STATE_DEBUG) {
@@ -324,11 +327,19 @@ void StartFsmTask(void *argument)
                 case STATE_DEBUG:
                     /*
                      * 进入 DEBUG：
-                     *   - 记录来源状态（pre_debug_state），退出时用于恢复参数量程
+                     *   - 记录来源状态（debug_origin_state），退出时用于恢复参数量程
                      *   - CMD_DEBUG_ENTER 通知 MotorTask 保存当前 PID/目标值
                      */
-                    pre_debug_state = (AppState)prev_state;
+                    debug_origin_state = (AppState)prev_state;
                     send_cmd(CMD_DEBUG_ENTER, 0, 0, 0);
+                    break;
+                case STATE_TEST:
+                    /*
+                     * 进入 TEST：
+                     *   - 刹停电机，进入独立测试沙盒
+                     *   - TestTask 接管 OLED 和外设，FsmTask 不再干预
+                     */
+                    send_cmd(CMD_STOP, 0, 0, 0);
                     break;
                 default:
                     break;  // STATE_MENU_MAIN / STATE_PENDULUM 无需特殊命令
@@ -380,8 +391,8 @@ void StartFsmTask(void *argument)
         /*   RP2 → KI（0 ~ KI_MAX）                                         */
         /*   RP3 → KD（0 ~ KD_MAX）                                         */
         /*   RP4 → 目标值（量程取决于来源模式）                                */
-        /*   K1  → 速度上限 + SPD_LIMIT_STEP                                */
-        /*   K2  → 速度上限 - SPD_LIMIT_STEP                                */
+        /*   从定速进 DEBUG：K1/K2 → 目标值 ± SPEED_STEP                     */
+        /*   从定位进 DEBUG：K1/K2 → 速度上限 ± SPD_LIMIT_STEP               */
         /*                                                                */
         /* 每周期都发送——即使旋钮没动也发，MotorTask 端自行判断是否变化。        */
         /* 这样设计简单可靠，避免了"检测旋钮是否转动"的额外逻辑。                */
@@ -402,16 +413,23 @@ void StartFsmTask(void *argument)
              *
              * 这保证了退出 DEBUG 恢复参数时，目标值的物理含义不会错乱。
              */
-            float tgt_limit = (pre_debug_state == STATE_MOTOR_POSITION)
+            float tgt_limit = (debug_origin_state == STATE_MOTOR_POSITION)
                             ? POS_TARGET_MAX : TARGET_MAX;
             float tgt = (rp_data.percent[3] - 50.0f) / 50.0f * tgt_limit;
 
             send_cmd(CMD_UPDATE_PID, kp, ki, kd);
             send_cmd(CMD_UPDATE_TGT, tgt, 0, 0);
 
-            /* K1/K2 调节速度上限（对定速模式和定位模式都有效） */
-            if (k1_click) send_cmd(CMD_SPD_LIMIT_UP,   SPD_LIMIT_STEP, 0, 0);
-            if (k2_click) send_cmd(CMD_SPD_LIMIT_DOWN, SPD_LIMIT_STEP, 0, 0);
+            /* K1/K2 功能按来源模式分流 */
+            if (debug_origin_state == STATE_MOTOR_POSITION) {
+                /* 定位进 DEBUG：调节速度上限 */
+                if (k1_click) send_cmd(CMD_SPD_LIMIT_UP,   SPD_LIMIT_STEP, 0, 0);
+                if (k2_click) send_cmd(CMD_SPD_LIMIT_DOWN, SPD_LIMIT_STEP, 0, 0);
+            } else {
+                /* 定速进 DEBUG：调节目标值 */
+                if (k1_click) send_cmd(CMD_ADJUST_UP,   SPEED_STEP, 0, 0);
+                if (k2_click) send_cmd(CMD_ADJUST_DOWN, SPEED_STEP, 0, 0);
+            }
         }
 
         osDelay(20);  // 20ms 周期 = 50Hz

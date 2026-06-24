@@ -13,12 +13,13 @@
 /* ========================================================================== */
 
 typedef enum {
-    STATE_MENU_MAIN     = 0,  /**< 主菜单：K1=电机  K2=倒立摆 */
-    STATE_MENU_MOTOR    = 1,  /**< 电机子菜单：K1=定速  K2=定位 */
+    STATE_MENU_MAIN     = 0,  /**< 主菜单：K1=电机  K2=倒立摆  K3=测试 */
+    STATE_MENU_MOTOR    = 1,  /**< 电机子菜单：K1=定速  K2=定位  K4=返回 */
     STATE_MOTOR_SPEED   = 2,  /**< 定速模式 — 速度环 PID 控制 */
     STATE_MOTOR_POSITION = 3, /**< 定位模式 — 位置环 PID 控制 */
     STATE_PENDULUM      = 4,  /**< 倒立摆模式（占位，后续实现） */
     STATE_DEBUG         = 5,  /**< 调参模式 — 旋钮实时调节 PID/Target */
+    STATE_TEST          = 6,  /**< 测试模式 — 独立驱动测试沙盒 */
 } AppState;
 
 /* ========================================================================== */
@@ -62,7 +63,8 @@ typedef struct {
 /* 全局变量（extern 声明 — 定义在 MotorTask.c / fsm.c）                         */
 /* ========================================================================== */
 
-extern volatile int      current_state;  /**< 当前系统状态，由 FSM 模块写入 */
+extern volatile int      current_state;       /**< 当前系统状态，由 FSM 模块写入 */
+extern volatile int      debug_origin_state;  /**< 进入 DEBUG 前的状态（UITask 分流显示） */
 extern volatile int16_t  speed;          /**< 编码器单周期增量（原始 counts） */
 extern volatile int32_t  location;       /**< 编码器累计位置（原始 counts） */
 extern volatile float    Kp;             /**< PID 比例系数 */

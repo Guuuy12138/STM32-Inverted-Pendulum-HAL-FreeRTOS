@@ -52,6 +52,9 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/APP/Tasks/MotorTask.c
         Core/APP/Tasks/SerialTask.c
         Core/APP/Types/appType.h
+        Core/APP/Tasks/TestTask.c
+        Core/BSP/angle.c
+        Core/BSP/angle.h
 )
 
 # Add STM32CubeMX generated sources

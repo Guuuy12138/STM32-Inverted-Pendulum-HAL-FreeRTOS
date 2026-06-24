@@ -25,14 +25,16 @@
  *   ┌──────────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
  *   │ 当前状态      │ K1 单击    │ K2 单击  │ K3 单击   │ K4 单击   │ K4 长按   │
  *   ├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┤
- *   │ MENU_MAIN    │ MENU_MTR │ PENDULUM │ MAIN(留) │ MAIN(留) │ MAIN(留)  │
- *   │ MENU_MOTOR   │ SPEED    │ POSITION │ MAIN     │ MTR(留)  │ DEBUG    │
+ *   │ MENU_MAIN    │ MENU_MTR │ PENDULUM │ TEST     │ MAIN(留) │ MAIN(留)  │
+ *   │ MENU_MOTOR   │ SPEED    │ POSIT   │ MTR(留)  │ MAIN     │ DEBUG    │
  *   │ MOTOR_SPEED  │ SPEED(留)│ SPEED(留) │ SPEED(留)│ MENU_MTR │ DEBUG    │
  *   │ MOTOR_POS    │ POS(留)  │ POS(留)   │ POS(留)  │ MENU_MTR │ DEBUG    │
- *   │ PENDULUM     │ PEN(留)  │ PEN(留)   │ MAIN     │ PEN(留)  │ DEBUG    │
+ *   │ PENDULUM     │ PEN(留)  │ PEN(留)   │ PEN(留)  │ MAIN     │ DEBUG    │
  *   │ DEBUG        │ DEB(留)  │ DEB(留)   │ DEB(留)  │ DEB(留)  │ 弹栈返回   │
+ *   │ TEST         │ TEST(留) │ TEST(留)  │ TEST(留) │ MAIN     │ TEST(留)  │
  *   └──────────────┴──────────┴──────────┴──────────┴──────────┴──────────┘
  *   "(留)" = 自保持，状态不变，fsm_dispatch() 返回 -1
+ *   注意：TEST 下 K4 短按 → MAIN（沙盒退出），不走自保持
  */
 
 #ifndef STM32_INVERTED_PENDULUM_FSM_H
@@ -40,8 +42,8 @@
 
 #include "../Types/appType.h"
 
-/** @brief 状态总数（对应 AppState 枚举的 6 个值：MENU_MAIN ~ DEBUG） */
-#define STATE_COUNT  6
+/** @brief 状态总数（对应 AppState 枚举的 7 个值：MENU_MAIN ~ TEST） */
+#define STATE_COUNT  7
 
 /** @brief 事件总数（对应 AppEvent 枚举的 5 个值：K1~K4 单击 + K4 长按） */
 #define EVT_COUNT    5

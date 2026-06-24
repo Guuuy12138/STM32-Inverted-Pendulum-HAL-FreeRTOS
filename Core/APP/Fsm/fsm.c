@@ -38,7 +38,7 @@
  *
  * 3. const 放 Flash
  *    table[][] 用 static const 修饰，编译器把它放在 Flash 里，不占 RAM。
- *    6 状态 × 5 事件 = 30 字节，对于嵌入式系统很友好。
+ *    7 状态 × 5 事件 = 35 字节，对于嵌入式系统很友好。
  */
 
 #include "fsm.h"
@@ -46,7 +46,7 @@
 /* ========================================================================== */
 /* 状态转移表                                                                   */
 /*                                                                            */
-/* 维度：STATE_COUNT(6行) × EVT_COUNT(5列) = 30 个格子                          */
+/* 维度：STATE_COUNT(7行) × EVT_COUNT(5列) = 35 个格子                          */
 /* 存储位置：Flash（const）                                                     */
 /*                                                                            */
 /* 读法：格子的值 = 从当前状态、收到该事件后，跳转到哪个状态                       */
@@ -54,11 +54,12 @@
 /* State vs Event 交叉索引：                                                    */
 /*   横向 5 列 = EVT_K1_CLICK, EVT_K2_CLICK, EVT_K3_CLICK,                     */
 /*               EVT_K4_CLICK, EVT_K4_LONG                                     */
-/*   纵向 6 行 = MENU_MAIN, MENU_MOTOR, MOTOR_SPEED,                           */
-/*               MOTOR_POSITION, PENDULUM, DEBUG                               */
+/*   纵向 7 行 = MENU_MAIN, MENU_MOTOR, MOTOR_SPEED,                           */
+/*               MOTOR_POSITION, PENDULUM, DEBUG, TEST                         */
 /*                                                                            */
 /* 自保持标记：格子值 == 行号 → fsm_dispatch() 返回 -1                           */
 /* 特殊分支：  DEBUG + K4L 不查表，走弹栈路径（见 fsm_dispatch 开头）             */
+/*            TEST + K4 短按 → 回 MAIN（沙盒退出）                               */
 /* ========================================================================== */
 
 static const uint8_t table[STATE_COUNT][EVT_COUNT] = {
@@ -67,17 +68,17 @@ static const uint8_t table[STATE_COUNT][EVT_COUNT] = {
     [STATE_MENU_MAIN] = {
         [EVT_K1_CLICK] = STATE_MENU_MOTOR,       // K1 → 电机菜单
         [EVT_K2_CLICK] = STATE_PENDULUM,         // K2 → 倒立摆
-        [EVT_K3_CLICK] = STATE_MENU_MAIN,        // 无操作
+        [EVT_K3_CLICK] = STATE_TEST,             // K3 → 测试模式
         [EVT_K4_CLICK] = STATE_MENU_MAIN,        // 无操作
-        [EVT_K4_LONG]  = STATE_MENU_MAIN,        // 无操作（菜单不进 DEBUG）
+        [EVT_K4_LONG]  = STATE_MENU_MAIN,        // 无操作
     },
 
     /* ---- MENU_MOTOR 电机子菜单 ---- */
     [STATE_MENU_MOTOR] = {
         [EVT_K1_CLICK] = STATE_MOTOR_SPEED,      // K1 → 定速
         [EVT_K2_CLICK] = STATE_MOTOR_POSITION,   // K2 → 定位
-        [EVT_K3_CLICK] = STATE_MENU_MAIN,        // K3 → 返回主菜单
-        [EVT_K4_CLICK] = STATE_MENU_MOTOR,       // 无操作
+        [EVT_K3_CLICK] = STATE_MENU_MOTOR,       // 自保持（无操作）
+        [EVT_K4_CLICK] = STATE_MENU_MAIN,        // K4 → 返回主菜单
         [EVT_K4_LONG]  = STATE_DEBUG,            // K4L → 调参
     },
 
@@ -103,8 +104,8 @@ static const uint8_t table[STATE_COUNT][EVT_COUNT] = {
     [STATE_PENDULUM] = {
         [EVT_K1_CLICK] = STATE_PENDULUM,
         [EVT_K2_CLICK] = STATE_PENDULUM,
-        [EVT_K3_CLICK] = STATE_MENU_MAIN,        // K3 → 返回主菜单
-        [EVT_K4_CLICK] = STATE_PENDULUM,
+        [EVT_K3_CLICK] = STATE_PENDULUM,         // 自保持（无操作）
+        [EVT_K4_CLICK] = STATE_MENU_MAIN,        // K4 → 返回主菜单
         [EVT_K4_LONG]  = STATE_DEBUG,
     },
 
@@ -116,6 +117,15 @@ static const uint8_t table[STATE_COUNT][EVT_COUNT] = {
         [EVT_K3_CLICK] = STATE_DEBUG,
         [EVT_K4_CLICK] = STATE_DEBUG,
         [EVT_K4_LONG]  = STATE_DEBUG,
+    },
+
+    /* ---- TEST 测试模式（沙盒） ---- */
+    [STATE_TEST] = {
+        [EVT_K1_CLICK] = STATE_TEST,             // 自保持（无操作）
+        [EVT_K2_CLICK] = STATE_TEST,             // 自保持（无操作）
+        [EVT_K3_CLICK] = STATE_TEST,             // 自保持（无操作）
+        [EVT_K4_CLICK] = STATE_MENU_MAIN,        // K4 → 返回主菜单
+        [EVT_K4_LONG]  = STATE_TEST,             // 自保持（不进 DEBUG）
     },
 };
 

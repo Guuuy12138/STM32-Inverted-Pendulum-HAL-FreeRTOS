@@ -40,10 +40,10 @@ void StartUITask(void *argument)
 
         /* ---- 快照 ---- */
         int   state = current_state;
+        int   debug_origin = debug_origin_state;
         float kp = Kp, ki = Ki, kd = Kd;
         float t  = Target, a = Actual, o = Out;
         float spl = PosSpeedLimit;
-        int32_t loc = location;
 
         /* ================================================================ */
         /* 根据系统状态渲染不同界面                                           */
@@ -54,8 +54,9 @@ void StartUITask(void *argument)
         /* ---- 主菜单 ---- */
         case STATE_MENU_MAIN:
             OLED_PrintASCIIString(0, 0,  "  SELECT MODE  ", &afont16x8, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(0, 32, "K1: Motor      ", &afont16x8, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(0, 48, "K2: Pendulum   ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 16, "K1: Motor      ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 32, "K2: Pendulum   ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 48, "K3: Test       ", &afont16x8, OLED_COLOR_NORMAL);
             break;
 
         /* ---- 电机子菜单 ---- */
@@ -63,7 +64,7 @@ void StartUITask(void *argument)
             OLED_PrintASCIIString(0, 0,  "  MOTOR  MODE  ", &afont16x8, OLED_COLOR_NORMAL);
             OLED_PrintASCIIString(0, 16, "K1: Speed      ", &afont16x8, OLED_COLOR_NORMAL);
             OLED_PrintASCIIString(0, 32, "K2: Position   ", &afont16x8, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(0, 48, "K3: Back       ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 48, "K4: Back       ", &afont16x8, OLED_COLOR_NORMAL);
             break;
 
         /* ---- 定速模式 ---- */
@@ -105,12 +106,23 @@ void StartUITask(void *argument)
         case STATE_PENDULUM:
             OLED_PrintASCIIString(0, 0,  "  PENDULUM     ", &afont16x8, OLED_COLOR_NORMAL);
             OLED_PrintASCIIString(0, 32, "   Not ready   ", &afont16x8, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(0, 48, "K3: Back       ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 48, "K4: Back       ", &afont16x8, OLED_COLOR_NORMAL);
             break;
 
-        /* ---- 调参模式 ---- */
+        /* ---- 测试模式（占位，由 TestTask 接管 OLED）---- */
+        case STATE_TEST:
+            OLED_PrintASCIIString(0, 0,  "  TEST  MODE   ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 32, "  In TestTask  ", &afont16x8, OLED_COLOR_NORMAL);
+            OLED_PrintASCIIString(0, 48, "  Coming soon  ", &afont16x8, OLED_COLOR_NORMAL);
+            break;
+
+        /* ---- 调参模式（按来源模式分流显示）---- */
         case STATE_DEBUG:
-            sprintf(line, "TUNE SpdLim:%3.0f ", (double)spl);
+            if (debug_origin == STATE_MOTOR_POSITION) {
+                sprintf(line, "TUNE SpdLim:%3.0f ", (double)spl);
+            } else {
+                sprintf(line, "     TUNE      ");
+            }
             OLED_PrintASCIIString(0, 0, line, &afont16x8, OLED_COLOR_REVERSED);
             sprintf(line, "Kp:%.2f", (double)kp);
             OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);

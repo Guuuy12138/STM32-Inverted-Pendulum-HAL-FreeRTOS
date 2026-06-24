@@ -75,6 +75,13 @@ const osThreadAttr_t FsmTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
+/* Definitions for TestTask */
+osThreadId_t TestTaskHandle;
+const osThreadAttr_t TestTask_attributes = {
+  .name = "TestTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
+};
 /* Definitions for motorCmdQueue */
 osMessageQueueId_t motorCmdQueueHandle;
 const osMessageQueueAttr_t motorCmdQueue_attributes = {
@@ -90,6 +97,7 @@ void StartUITask(void *argument);
 extern void StartMotorTask(void *argument);
 extern void StartSerialTask(void *argument);
 extern void StartFsmTask(void *argument);
+extern void StartTestTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -135,6 +143,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of FsmTask */
   FsmTaskHandle = osThreadNew(StartFsmTask, NULL, &FsmTask_attributes);
+
+  /* creation of TestTask */
+  TestTaskHandle = osThreadNew(StartTestTask, NULL, &TestTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
