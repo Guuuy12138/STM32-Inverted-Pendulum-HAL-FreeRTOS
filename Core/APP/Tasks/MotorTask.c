@@ -299,6 +299,7 @@ void StartMotorTask(void *argument)
                 Target = 0;
                 Out = 0;
                 PID_Clear(pid);                          // 清 PID 历史，防下次启动突变
+                sub_mode = SUB_IDLE;                     // 进入空闲态，电机不再出力
                 break;
 
             /* ============================================================= *

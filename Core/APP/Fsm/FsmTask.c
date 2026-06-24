@@ -367,7 +367,7 @@ void StartFsmTask(void *argument)
              */
             if (k1_click) send_cmd(CMD_ADJUST_UP,   SPEED_STEP, 0, 0);
             if (k2_click) send_cmd(CMD_ADJUST_DOWN, SPEED_STEP, 0, 0);
-            if (k3_click) send_cmd(CMD_STOP, 0, 0, 0);
+            if (k3_click) send_cmd(CMD_UPDATE_TGT, 0, 0, 0);  // 归零目标，PID 继续跑
         }
 
         if (cur == STATE_MOTOR_POSITION) {
