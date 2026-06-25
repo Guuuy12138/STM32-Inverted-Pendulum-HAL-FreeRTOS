@@ -36,6 +36,12 @@ void StartUITask(void *argument)
     char line[16];
 
     for (;;) {
+        /* TEST 模式下 TestTask 接管 OLED，UITask 不碰，避免竞态 */
+        if (current_state == STATE_TEST) {
+            osDelay(100);
+            continue;
+        }
+
         OLED_NewFrame();
 
         /* ---- 快照 ---- */
@@ -102,12 +108,51 @@ void StartUITask(void *argument)
             OLED_PrintASCIIString(64, 48, line, &afont16x8, OLED_COLOR_NORMAL);
             break;
 
-        /* ---- 倒立摆（占位）---- */
-        case STATE_PENDULUM:
-            OLED_PrintASCIIString(0, 0,  "  PENDULUM     ", &afont16x8, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(0, 32, "   Not ready   ", &afont16x8, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(0, 48, "K4: Back       ", &afont16x8, OLED_COLOR_NORMAL);
+        /* ---- 倒立摆 ---- */
+        case STATE_PENDULUM: {
+            uint8_t  sub  = pendulum_substate;
+            float    akp  = pendulum_angle_Kp;
+            float    aki  = pendulum_angle_Ki;
+            float    akd  = pendulum_angle_Kd;
+            uint16_t tgt  = pendulum_angle_tgt;
+            uint16_t raw  = pendulum_angle_raw;
+            float    out  = pendulum_pwm;
+
+            /* 标题：左侧模式名，右侧子状态 */
+            switch (sub) {
+            case PENDULUM_IDLE:
+                OLED_PrintASCIIString(0, 0, "~~ PENDULUM ~~ ", &afont16x8, OLED_COLOR_NORMAL);
+                break;
+            case PENDULUM_SWING_UP:
+                OLED_PrintASCIIString(0, 0, "~~ SWING UP ~~ ", &afont16x8, OLED_COLOR_NORMAL);
+                break;
+            case PENDULUM_BALANCING:
+                OLED_PrintASCIIString(0, 0, "~~ PENDULUM ~~ ", &afont16x8, OLED_COLOR_NORMAL);
+                break;
+            case PENDULUM_FALLEN:
+                OLED_PrintASCIIString(0, 0, "!! FALLEN !!   ", &afont16x8, OLED_COLOR_REVERSED);
+                break;
+            }
+
+            /* y=16: Kp | Tgt */
+            sprintf(line, "Kp:%.2f", (double)akp);
+            OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
+            sprintf(line, "Tgt:%-4u", (unsigned int)tgt);
+            OLED_PrintASCIIString(64, 16, line, &afont16x8, OLED_COLOR_NORMAL);
+
+            /* y=32: Ki | Act */
+            sprintf(line, "Ki:%.2f", (double)aki);
+            OLED_PrintASCIIString(0, 32, line, &afont16x8, OLED_COLOR_NORMAL);
+            sprintf(line, "Act:%-4u", (unsigned int)raw);
+            OLED_PrintASCIIString(64, 32, line, &afont16x8, OLED_COLOR_NORMAL);
+
+            /* y=48: Kd | Out */
+            sprintf(line, "Kd:%.2f", (double)akd);
+            OLED_PrintASCIIString(0, 48, line, &afont16x8, OLED_COLOR_NORMAL);
+            sprintf(line, "Out:%+4.0f", (double)out);
+            OLED_PrintASCIIString(64, 48, line, &afont16x8, OLED_COLOR_NORMAL);
             break;
+        }
 
         /* ---- 测试模式（占位，由 TestTask 接管 OLED）---- */
         case STATE_TEST:
@@ -118,24 +163,55 @@ void StartUITask(void *argument)
 
         /* ---- 调参模式（按来源模式分流显示）---- */
         case STATE_DEBUG:
-            if (debug_origin == STATE_MOTOR_POSITION) {
-                sprintf(line, "TUNE SpdLim:%3.0f ", (double)spl);
+            if (debug_origin == STATE_PENDULUM) {
+                /*
+                 * 从倒立摆进 DEBUG：调角度环 PID，目标固定 2048
+                 *   左半屏：角度环 Kp / Ki / Kd
+                 *   右半屏：Tgt=2048 / Act=角度实测 / Out=PWM
+                 */
+                float akp = pendulum_angle_Kp;
+                float aki = pendulum_angle_Ki;
+                float akd = pendulum_angle_Kd;
+                uint16_t raw = pendulum_angle_raw;
+                float    pwm = pendulum_pwm;
+
+                OLED_PrintASCIIString(0, 0, "TUNE PENDULUM  ", &afont16x8, OLED_COLOR_REVERSED);
+
+                sprintf(line, "Kp:%.2f", (double)akp);
+                OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
+                sprintf(line, "Tgt:2048 ");
+                OLED_PrintASCIIString(64, 16, line, &afont16x8, OLED_COLOR_NORMAL);
+
+                sprintf(line, "Ki:%.2f", (double)aki);
+                OLED_PrintASCIIString(0, 32, line, &afont16x8, OLED_COLOR_NORMAL);
+                sprintf(line, "Act:%-4u", (unsigned int)raw);
+                OLED_PrintASCIIString(64, 32, line, &afont16x8, OLED_COLOR_NORMAL);
+
+                sprintf(line, "Kd:%.2f", (double)akd);
+                OLED_PrintASCIIString(0, 48, line, &afont16x8, OLED_COLOR_NORMAL);
+                sprintf(line, "Out:%+4.0f", (double)pwm);
+                OLED_PrintASCIIString(64, 48, line, &afont16x8, OLED_COLOR_NORMAL);
             } else {
-                sprintf(line, "     TUNE      ");
+                /* 从定速/定位进 DEBUG：调电机 PID */
+                if (debug_origin == STATE_MOTOR_POSITION) {
+                    sprintf(line, "TUNE SpdLim:%3.0f ", (double)spl);
+                } else {
+                    sprintf(line, "     TUNE      ");
+                }
+                OLED_PrintASCIIString(0, 0, line, &afont16x8, OLED_COLOR_REVERSED);
+                sprintf(line, "Kp:%.2f", (double)kp);
+                OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
+                sprintf(line, "Ki:%.2f", (double)ki);
+                OLED_PrintASCIIString(0, 32, line, &afont16x8, OLED_COLOR_NORMAL);
+                sprintf(line, "Kd:%.2f", (double)kd);
+                OLED_PrintASCIIString(0, 48, line, &afont16x8, OLED_COLOR_NORMAL);
+                sprintf(line, "Tgt:%+.0f", (double)t);
+                OLED_PrintASCIIString(64, 16, line, &afont16x8, OLED_COLOR_NORMAL);
+                sprintf(line, "Act:%+.0f", (double)a);
+                OLED_PrintASCIIString(64, 32, line, &afont16x8, OLED_COLOR_NORMAL);
+                sprintf(line, "Out:%+.0f", (double)o);
+                OLED_PrintASCIIString(64, 48, line, &afont16x8, OLED_COLOR_NORMAL);
             }
-            OLED_PrintASCIIString(0, 0, line, &afont16x8, OLED_COLOR_REVERSED);
-            sprintf(line, "Kp:%.2f", (double)kp);
-            OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
-            sprintf(line, "Ki:%.2f", (double)ki);
-            OLED_PrintASCIIString(0, 32, line, &afont16x8, OLED_COLOR_NORMAL);
-            sprintf(line, "Kd:%.2f", (double)kd);
-            OLED_PrintASCIIString(0, 48, line, &afont16x8, OLED_COLOR_NORMAL);
-            sprintf(line, "Tgt:%+.0f", (double)t);
-            OLED_PrintASCIIString(64, 16, line, &afont16x8, OLED_COLOR_NORMAL);
-            sprintf(line, "Act:%+.0f", (double)a);
-            OLED_PrintASCIIString(64, 32, line, &afont16x8, OLED_COLOR_NORMAL);
-            sprintf(line, "Out:%+.0f", (double)o);
-            OLED_PrintASCIIString(64, 48, line, &afont16x8, OLED_COLOR_NORMAL);
             break;
 
         default:

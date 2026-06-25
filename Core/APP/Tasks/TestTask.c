@@ -44,7 +44,7 @@ void StartTestTask(void *argument)
         }
         /* ---- 读取角度传感器 ---- */
         uint16_t raw = ANGLE_GetRaw();
-        float    pct = ANGLE_GetPercent();
+        float    pct = (float)raw * 100.0f / 4095.0f;  // 直接用 raw 算，避免二次 ADC 转换
 
         /* ---- 在帧缓冲中绘制 ---- */
         OLED_NewFrame();

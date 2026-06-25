@@ -83,6 +83,11 @@
 #define KP_MAX        2.0f
 #define KI_MAX        2.0f
 #define KD_MAX        2.0f
+
+/** @brief 倒立摆角度环 PID 调参量程（独立于电机 PID） */
+#define PENDULUM_KP_MAX  1.0f
+#define PENDULUM_KI_MAX  1.0f
+#define PENDULUM_KD_MAX  1.0f
 #define TARGET_MAX    150.0f
 
 /** @brief 定速模式下 K1/K2 每次加减的步长（RPM） */
@@ -302,7 +307,8 @@ void StartFsmTask(void *argument)
              * 例外：进入 DEBUG 不刹停——电机继续跑，方便在线调参观察效果。
              *       进入 TEST 不刹停——测试沙盒，电机不应在跑。
              */
-            if ((prev_state == STATE_MOTOR_SPEED || prev_state == STATE_MOTOR_POSITION)
+            if ((prev_state == STATE_MOTOR_SPEED || prev_state == STATE_MOTOR_POSITION
+                 || prev_state == STATE_PENDULUM)
                 && new_state != STATE_DEBUG) {
                 send_cmd(CMD_STOP, 0, 0, 0);
             }
@@ -344,8 +350,16 @@ void StartFsmTask(void *argument)
                      */
                     send_cmd(CMD_STOP, 0, 0, 0);
                     break;
+                case STATE_PENDULUM:
+                    /*
+                     * 进入 PENDULUM：
+                     *   - CMD_STOP 确保 MotorTask 闲置，PendulumTask 接管电机
+                     *   - PendulumTask 自行读取传感器、执行控制
+                     */
+                    send_cmd(CMD_STOP, 0, 0, 0);
+                    break;
                 default:
-                    break;  // STATE_MENU_MAIN / STATE_PENDULUM 无需特殊命令
+                    break;  // STATE_MENU_MAIN 无需特殊命令
                 }
             }
         }
@@ -387,51 +401,77 @@ void StartFsmTask(void *argument)
             send_cmd(CMD_UPDATE_TGT, tgt, 0, 0);
         }
 
+        if (cur == STATE_PENDULUM) {
+            /*
+             * 倒立摆模式 — K1/K2/K3 通过 volatile 标志位传给 PendulumTask：
+             *   K1 → 启动/停止（切换 PENDULUM_CMD_TOGGLE）
+             *   K2 → 顺时针旋转一圈（PENDULUM_CMD_ROTATE_CW）
+             *   K3 → 逆时针旋转一圈（PENDULUM_CMD_ROTATE_CCW）
+             *
+             * PendulumTask 每 5ms 读取并清零 pendulum_cmd，不阻塞。
+             */
+            if (k1_click) pendulum_cmd = PENDULUM_CMD_TOGGLE;
+            if (k2_click) pendulum_cmd = PENDULUM_CMD_ROTATE_CW;
+            if (k3_click) pendulum_cmd = PENDULUM_CMD_ROTATE_CCW;
+        }
+
         /* ================================================================ */
-        /* Step 6：DEBUG 模式 — 4 路旋钮实时调参                               */
+        /* Step 6：DEBUG 模式 — 按来源模式分流                                 */
         /*                                                                */
-        /*   RP1 → KP（0 ~ KP_MAX）                                         */
-        /*   RP2 → KI（0 ~ KI_MAX）                                         */
-        /*   RP3 → KD（0 ~ KD_MAX）                                         */
-        /*   RP4 → 目标值（量程取决于来源模式）                                */
-        /*   从定速进 DEBUG：K1/K2 → 目标值 ± SPEED_STEP                     */
-        /*   从定位进 DEBUG：K1/K2 → 速度上限 ± SPD_LIMIT_STEP               */
-        /*                                                                */
-        /* 每周期都发送——即使旋钮没动也发，MotorTask 端自行判断是否变化。        */
-        /* 这样设计简单可靠，避免了"检测旋钮是否转动"的额外逻辑。                */
+        /*   从定速/定位进 DEBUG → 4 路旋钮调 MotorTask PID + Target         */
+        /*   从倒立摆进 DEBUG   → 3 路旋钮调角度环 PID，Target 固定 2048      */
         /* ================================================================ */
 
         if (cur == STATE_DEBUG) {
-            RP_ReadAll(&rp_data, RP_CHANNELS);
 
-            /* 旋钮 0~100% 线性映射到 PID 量程 */
-            float kp = rp_data.percent[0] * KP_MAX / 100.0f;
-            float ki = rp_data.percent[1] * KI_MAX / 100.0f;
-            float kd = rp_data.percent[2] * KD_MAX / 100.0f;
+            if (debug_origin_state == STATE_PENDULUM) {
+                /*
+                 * 从倒立摆进 DEBUG：
+                 *   RP1 → 角度环 KP（0 ~ PENDULUM_KP_MAX）
+                 *   RP2 → 角度环 KI（0 ~ PENDULUM_KI_MAX）
+                 *   RP3 → 角度环 KD（0 ~ PENDULUM_KD_MAX）
+                 *   RP4 → 不使用（目标固定 2048）
+                 *   PID 参数通过 volatile 变量直接传给 PendulumTask
+                 */
+                RP_ReadAll(&rp_data, 3);  // 只读前 3 路
 
-            /*
-             * 目标值量程选择：
-             *   从定速模式进 DEBUG → TARGET_MAX（±150 RPM）
-             *   从定位模式进 DEBUG → POS_TARGET_MAX（±400 脉冲）
-             *
-             * 这保证了退出 DEBUG 恢复参数时，目标值的物理含义不会错乱。
-             */
-            float tgt_limit = (debug_origin_state == STATE_MOTOR_POSITION)
-                            ? POS_TARGET_MAX : TARGET_MAX;
-            float tgt = (rp_data.percent[3] - 50.0f) / 50.0f * tgt_limit;
+                float kp = rp_data.percent[0] * PENDULUM_KP_MAX / 100.0f;
+                float ki = rp_data.percent[1] * PENDULUM_KI_MAX / 100.0f;
+                float kd = rp_data.percent[2] * PENDULUM_KD_MAX / 100.0f;
 
-            send_cmd(CMD_UPDATE_PID, kp, ki, kd);
-            send_cmd(CMD_UPDATE_TGT, tgt, 0, 0);
+                pendulum_angle_Kp = kp;
+                pendulum_angle_Ki = ki;
+                pendulum_angle_Kd = kd;
 
-            /* K1/K2 功能按来源模式分流 */
-            if (debug_origin_state == STATE_MOTOR_POSITION) {
-                /* 定位进 DEBUG：调节速度上限 */
-                if (k1_click) send_cmd(CMD_SPD_LIMIT_UP,   SPD_LIMIT_STEP, 0, 0);
-                if (k2_click) send_cmd(CMD_SPD_LIMIT_DOWN, SPD_LIMIT_STEP, 0, 0);
+                /* K1 → 启动/停止（不因进入 DEBUG 而失效） */
+                if (k1_click) pendulum_cmd = PENDULUM_CMD_TOGGLE;
+
             } else {
-                /* 定速进 DEBUG：调节目标值 */
-                if (k1_click) send_cmd(CMD_ADJUST_UP,   SPEED_STEP, 0, 0);
-                if (k2_click) send_cmd(CMD_ADJUST_DOWN, SPEED_STEP, 0, 0);
+                /*
+                 * 从定速/定位进 DEBUG：
+                 *   RP1 → KP, RP2 → KI, RP3 → KD, RP4 → Target
+                 */
+                RP_ReadAll(&rp_data, RP_CHANNELS);
+
+                float kp = rp_data.percent[0] * KP_MAX / 100.0f;
+                float ki = rp_data.percent[1] * KI_MAX / 100.0f;
+                float kd = rp_data.percent[2] * KD_MAX / 100.0f;
+
+                float tgt_limit = (debug_origin_state == STATE_MOTOR_POSITION)
+                                ? POS_TARGET_MAX : TARGET_MAX;
+                float tgt = (rp_data.percent[3] - 50.0f) / 50.0f * tgt_limit;
+
+                send_cmd(CMD_UPDATE_PID, kp, ki, kd);
+                send_cmd(CMD_UPDATE_TGT, tgt, 0, 0);
+
+                /* K1/K2 功能按来源模式分流 */
+                if (debug_origin_state == STATE_MOTOR_POSITION) {
+                    if (k1_click) send_cmd(CMD_SPD_LIMIT_UP,   SPD_LIMIT_STEP, 0, 0);
+                    if (k2_click) send_cmd(CMD_SPD_LIMIT_DOWN, SPD_LIMIT_STEP, 0, 0);
+                } else {
+                    if (k1_click) send_cmd(CMD_ADJUST_UP,   SPEED_STEP, 0, 0);
+                    if (k2_click) send_cmd(CMD_ADJUST_DOWN, SPEED_STEP, 0, 0);
+                }
             }
         }
 

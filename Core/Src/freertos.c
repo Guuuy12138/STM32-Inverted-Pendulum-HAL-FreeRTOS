@@ -82,6 +82,13 @@ const osThreadAttr_t TestTask_attributes = {
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
+/* Definitions for PendulumTask */
+osThreadId_t PendulumTaskHandle;
+const osThreadAttr_t PendulumTask_attributes = {
+  .name = "PendulumTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* Definitions for motorCmdQueue */
 osMessageQueueId_t motorCmdQueueHandle;
 const osMessageQueueAttr_t motorCmdQueue_attributes = {
@@ -98,6 +105,7 @@ extern void StartMotorTask(void *argument);
 extern void StartSerialTask(void *argument);
 extern void StartFsmTask(void *argument);
 extern void StartTestTask(void *argument);
+extern void StartPendulumTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -146,6 +154,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of TestTask */
   TestTaskHandle = osThreadNew(StartTestTask, NULL, &TestTask_attributes);
+
+  /* creation of PendulumTask */
+  PendulumTaskHandle = osThreadNew(StartPendulumTask, NULL, &PendulumTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
