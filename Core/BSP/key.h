@@ -1,6 +1,11 @@
-//
-// Created by G on 2026/6/16.
-//
+/**
+ * @file    key.h
+ * @brief   按键输入驱动头文件 — 4 按键（K1~K4）消抖 / 边沿检测 / 长按判定 API
+ * @author  G
+ * @date    2026/6/16
+ *
+ * K1=PB10, K2=PB11, K3=PA11, K4=PA12，默认 active-low（上拉，按下=低电平）
+ */
 
 #ifndef STM32_INVERTED_PENDULUM_KEY_H
 #define STM32_INVERTED_PENDULUM_KEY_H

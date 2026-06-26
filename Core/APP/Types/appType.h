@@ -1,7 +1,39 @@
-//
-// Created by G on 2026/6/18.
-// appType.h — 系统状态机类型定义、消息结构体、跨任务共享变量
-//
+/**
+ * @file    appType.h
+ * @brief   系统类型定义中心 — 状态枚举、事件枚举、消息结构体、跨任务共享变量声明
+ * @author  G
+ * @date    2026/6/18
+ *
+ * ==========================================================================
+ * 消息协议（MotorCmd）
+ * ==========================================================================
+ *
+ *   FsmTask 通过 motorCmdQueue 向 MotorTask 发送 MotorCmd 消息，协议如下：
+ *
+ *   ┌─────────────────┬──────────┬───────────┬───────────┐
+ *   │ 命令码           │ value1   │  value2   │  value3   │
+ *   ├─────────────────┼──────────┼───────────┼───────────┤
+ *   │ CMD_SPEED       │  —       │   —       │   —       │  进入定速模式，初始化速度环
+ *   │ CMD_POSITION    │  —       │   —       │   —       │  进入定位模式，初始化位置环
+ *   │ CMD_STOP        │  —       │   —       │   —       │  急停，刹停电机
+ *   │ CMD_DEBUG_ENTER │  —       │   —       │   —       │  保存当前 PID/目标，进入调参
+ *   │ CMD_DEBUG_EXIT  │  —       │   —       │   —       │  恢复进入前的 PID/目标
+ *   │ CMD_UPDATE_TGT  │  目标值   │   —       │   —       │  更新目标值（速度/位置）
+ *   │ CMD_UPDATE_PID  │  Kp      │   Ki      │   Kd      │  更新 PID 三参数
+ *   │ CMD_ADJUST_UP   │  步长     │   —       │   —       │  目标值 + 步长（按键调速）
+ *   │ CMD_ADJUST_DOWN │  步长     │   —       │   —       │  目标值 - 步长（按键调速）
+ *   │ CMD_SPD_LIMIT_UP│  步长     │   —       │   —       │  速度上限 + 步长（定位模式）
+ *   │ CMD_SPD_LIMIT_DN│  步长     │   —       │   —       │  速度上限 - 步长（定位模式）
+ *   └─────────────────┴──────────┴───────────┴───────────┘
+ *
+ *   PendulumTask 不使用消息队列，而是通过 volatile 标志位传递命令：
+ *     FsmTask 写 pendulum_cmd → PendulumTask 读取后清零
+ *     PENDULUM_CMD_TOGGLE — 启动/停止
+ *     PENDULUM_CMD_ROTATE_CW / CCW — 顺时针/逆时针旋转一圈
+ *
+ *   DEBUG 模式下 PendulumTask PID 参数通过 volatile float 变量直接传递：
+ *     pendulum_angle_Kp / Ki / Kd — FsmTask 写，PendulumTask 每周期同步
+ */
 
 #ifndef STM32_INVERTED_PENDULUM_APPTYPE_H
 #define STM32_INVERTED_PENDULUM_APPTYPE_H

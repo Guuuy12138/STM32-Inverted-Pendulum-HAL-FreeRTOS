@@ -1,6 +1,12 @@
-//
-// Created by G on 2026/6/16.
-//
+/**
+ * @file    encoder.h
+ * @brief   正交编码器驱动头文件 — TIM3 编码器模式，4 倍频，有符号 16 位计数
+ * @author  G
+ * @date    2026/6/16
+ *
+ * 编码器 102 PPR × TIM3 4 倍频 = 408 counts/rev
+ * PA6=TIM3_CH1, PA7=TIM3_CH2，16 位定时器自动处理溢出
+ */
 
 #ifndef STM32_INVERTED_PENDULUM_ENCODER_H
 #define STM32_INVERTED_PENDULUM_ENCODER_H

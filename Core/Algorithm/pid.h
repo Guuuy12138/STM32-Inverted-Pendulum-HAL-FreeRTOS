@@ -1,6 +1,14 @@
-//
-// Created by G on 2026/6/15.
-//
+/**
+ * @file    pid.h
+ * @brief   PID 控制器头文件 — 位置式 / 增量式，速度环 / 位置环，抗积分饱和、积分分离
+ * @author  G
+ * @date    2026/6/15
+ *
+ * 提供了 4 种 PID 控制函数组合（位置式/增量式 × 速度/位置）。
+ * 所有 4 个函数都是底层 PID_PositionalCore / PID_IncrementalCore 的薄封装，
+ * 区别在于调用语义和返回值的物理含义。
+ * 详细理论说明见 pid.c 文件头注释。
+ */
 
 #ifndef STM32_INVERTED_PENDULUM_PID_H
 #define STM32_INVERTED_PENDULUM_PID_H

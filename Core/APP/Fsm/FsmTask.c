@@ -88,6 +88,8 @@
 #define PENDULUM_KP_MAX  1.0f
 #define PENDULUM_KI_MAX  1.0f
 #define PENDULUM_KD_MAX  1.0f
+
+/** @brief 定速模式目标速度量程上限（RPM），用于 DEBUG 模式旋钮映射 */
 #define TARGET_MAX    150.0f
 
 /** @brief 定速模式下 K1/K2 每次加减的步长（RPM） */
@@ -227,9 +229,7 @@ void StartFsmTask(void *argument)
         /* K4 用 KEY_IsPressed——读原始 GPIO 电平，用于长按计时。             */
         /* ================================================================ */
 
-        /* bool 型变量只存 true（真）或 false（假），相当于一个开关量标志。
-           功能上与 int 一样（函数返回的本来就是 0/1），但用 bool 一眼就能看出
-           "这是个真假判断，不是存数值的"。这是给人读的，编译器不关心区别。 */
+        /* bool 型变量只存 true/false，语义上表示"事件是否发生"，比 int 更具可读性 */
         bool k1_click = KEY_IsClicked(KEY_1);
         bool k2_click = KEY_IsClicked(KEY_2);
         bool k3_click = KEY_IsClicked(KEY_3);
@@ -305,7 +305,7 @@ void StartFsmTask(void *argument)
             /*
              * 离开运行态回到菜单或切换模式 → 刹停电机。
              * 例外：进入 DEBUG 不刹停——电机继续跑，方便在线调参观察效果。
-             *       进入 TEST 不刹停——测试沙盒，电机不应在跑。
+             *       进入 TEST 刹停——测试沙盒，确保电机安全停止后再进入。
              */
             if ((prev_state == STATE_MOTOR_SPEED || prev_state == STATE_MOTOR_POSITION
                  || prev_state == STATE_PENDULUM)

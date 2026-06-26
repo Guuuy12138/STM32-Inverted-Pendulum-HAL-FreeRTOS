@@ -1,6 +1,12 @@
-//
-// Created by G on 2026/6/15.
-//
+/**
+ * @file    TB6612.h
+ * @brief   TB6612FNG 双路直流电机驱动芯片头文件 — 状态 / 速度 / PWM 控制 API
+ * @author  G
+ * @date    2026/6/15
+ *
+ * PWM 由 TIM2 CH1/CH2 硬件生成，频率 20kHz，周期 50 计数（0~49）
+ * IN1/IN2 控制方向，PWM 控制速度，支持 4 种电机状态：正转 / 反转 / 制动 / 滑行
+ */
 
 #ifndef STM32_INVERTED_PENDULUM_TB6612_H
 #define STM32_INVERTED_PENDULUM_TB6612_H
@@ -13,16 +19,6 @@
 #define TB6612_PWM_FREQ_HZ    20000
 /** @brief 计数器周期 (ARR + 1)，TIM2 ARR = 49 时此值为 50 */
 #define TB6612_PWM_PERIOD     50
-
-/* -------------------------------------------------------------------------- */
-/* 枚举定义                                                                    */
-/* -------------------------------------------------------------------------- */
-
-/** @brief 衰减模式 */
-typedef enum {
-    SLOW_DECAY,  /**< 慢衰减模式 (PWM 引脚控制，默认) */
-    FAST_DECAY   /**< 快衰减模式 (预留) */
-} DecayMode;
 
 /** @brief 电机通道选择 */
 typedef enum {

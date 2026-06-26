@@ -1,13 +1,19 @@
-//
-// Created by G on 2026/6/15.
-//
+/**
+ * @file    rp.h
+ * @brief   电位器（Rotary Potentiometer）ADC 驱动头文件 — 4 路独立旋钮，raw + percent 双格式输出
+ * @author  G
+ * @date    2026/6/15
+ *
+ * 4 路电位器连接到 ADC2 的 CH2~CH5（PA2~PA5），12 位 ADC 分辨率（0~4095）
+ */
 
 #ifndef STM32_INVERTED_PENDULUM_RP_H
 #define STM32_INVERTED_PENDULUM_RP_H
 
 #include <stdint.h>
 
-#define RP_CHANNELS 4 //ADC通道数
+/** @brief ADC 通道数（4 路电位器） */
+#define RP_CHANNELS 4
 
 /**
  * @brief RP数据结构体，每个通道的raw值和percent值独立存放
