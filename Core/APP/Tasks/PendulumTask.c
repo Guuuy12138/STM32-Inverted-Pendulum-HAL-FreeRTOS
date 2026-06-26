@@ -77,9 +77,9 @@
 /* 角度环 PID 参数（内环：(2048 + 偏移) - 角度实测 → PWM）                      */
 /* ========================================================================== */
 
-#define ANGLE_KP        0.50f   /**< 角度环比例 */
-#define ANGLE_KI        0.0f    /**< 角度环积分 */
-#define ANGLE_KD        0.10f   /**< 角度环微分 */
+#define ANGLE_KP        0.4f   /**< 角度环比例 */
+#define ANGLE_KI        0.01f    /**< 角度环积分 */
+#define ANGLE_KD        0.4f   /**< 角度环微分 */
 #define ANGLE_OUT_MAX   100.0f  /**< PWM 输出限幅 ±100% */
 
 /* ========================================================================== */
@@ -120,6 +120,13 @@ volatile uint16_t pendulum_angle_tgt = 2048;
 volatile float    pendulum_angle_Kp  = ANGLE_KP;
 volatile float    pendulum_angle_Ki  = ANGLE_KI;
 volatile float    pendulum_angle_Kd  = ANGLE_KD;
+
+/* 位置环（外环）参数 — 供 UI 显示和 DEBUG 调节 */
+volatile float    pendulum_pos_Kp    = POS_KP;
+volatile float    pendulum_pos_Ki    = POS_KI;
+volatile float    pendulum_pos_Kd    = POS_KD;
+volatile int32_t  pendulum_pos_tgt   = 0;        /**< 位置目标（编码器计数） */
+volatile float    pendulum_pos_out   = 0.0f;     /**< 位置环输出（角度偏移量） */
 
 /* ========================================================================== */
 /* 任务入口                                                                     */
@@ -345,6 +352,11 @@ void StartPendulumTask(void *argument)
             if (pid_angle.Ki != pendulum_angle_Ki) pid_angle.Ki = pendulum_angle_Ki;
             if (pid_angle.Kd != pendulum_angle_Kd) pid_angle.Kd = pendulum_angle_Kd;
 
+            /* 位置环实时 PID 参数 */
+            if (pid_pos.Kp != pendulum_pos_Kp) pid_pos.Kp = pendulum_pos_Kp;
+            if (pid_pos.Ki != pendulum_pos_Ki) pid_pos.Ki = pendulum_pos_Ki;
+            if (pid_pos.Kd != pendulum_pos_Kd) pid_pos.Kd = pendulum_pos_Kd;
+
             PID_SetTarget(&pid_angle, 0.0f);
             float angle_pwm = PID_PositionalSpeed(&pid_angle, -angle_error);
             // 注意：PID 计算 target - actual，这里 target=0, actual=-angle_error
@@ -442,6 +454,10 @@ void StartPendulumTask(void *argument)
         pendulum_angle_tgt = (substate == PENDULUM_BALANCING)
                            ? (uint16_t)(2048.0f + pos_out + 0.5f)
                            : (uint16_t)2048;
+
+        /* 位置环全局变量更新 */
+        pendulum_pos_tgt = pos_target;
+        pendulum_pos_out = pos_out;
 
         osDelay(5);  // 200Hz
     }

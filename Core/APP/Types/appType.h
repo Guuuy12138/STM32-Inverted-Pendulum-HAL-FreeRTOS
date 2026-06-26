@@ -111,4 +111,11 @@ extern volatile float    pendulum_angle_Kp;   /**< 角度环 Kp */
 extern volatile float    pendulum_angle_Ki;   /**< 角度环 Ki */
 extern volatile float    pendulum_angle_Kd;   /**< 角度环 Kd */
 
+/* 位置环（外环）参数 — 供 UI 显示和 DEBUG 调节 */
+extern volatile float    pendulum_pos_Kp;     /**< 位置环 Kp */
+extern volatile float    pendulum_pos_Ki;     /**< 位置环 Ki */
+extern volatile float    pendulum_pos_Kd;     /**< 位置环 Kd */
+extern volatile int32_t  pendulum_pos_tgt;    /**< 位置目标（编码器计数） */
+extern volatile float    pendulum_pos_out;    /**< 位置环输出（角度偏移量） */
+
 #endif //STM32_INVERTED_PENDULUM_APPTYPE_H
