@@ -121,17 +121,23 @@ void StartUITask(void *argument)
             /* y=0: 标题 */
             OLED_PrintASCIIString(0, 0, "   PENDULUM    ", &afont16x8, OLED_COLOR_NORMAL);
 
-            /* y=16: Kp + Ki */
-            sprintf(line, "Kp:%.2f Ki:%.2f", (double)akp, (double)aki);
+            /* y=16: 左 Kp | 右 Tgt */
+            sprintf(line, "Kp:%.2f", (double)akp);
             OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
+            sprintf(line, "Tgt:%4u", (unsigned int)a_tgt);
+            OLED_PrintASCIIString(64, 16, line, &afont16x8, OLED_COLOR_NORMAL);
 
-            /* y=32: Kd + Tgt */
-            sprintf(line, "Kd:%.2f Tgt:%4u", (double)akd, (unsigned int)a_tgt);
+            /* y=32: 左 Ki | 右 Act */
+            sprintf(line, "Ki:%.2f", (double)aki);
             OLED_PrintASCIIString(0, 32, line, &afont16x8, OLED_COLOR_NORMAL);
+            sprintf(line, "Act:%-4u", (unsigned int)a_act);
+            OLED_PrintASCIIString(64, 32, line, &afont16x8, OLED_COLOR_NORMAL);
 
-            /* y=48: Act + Out */
-            sprintf(line, "Act:%4u Out:%+4.0f", (unsigned int)a_act, (double)a_out);
+            /* y=48: 左 Kd | 右 Out */
+            sprintf(line, "Kd:%.2f", (double)akd);
             OLED_PrintASCIIString(0, 48, line, &afont16x8, OLED_COLOR_NORMAL);
+            sprintf(line, "Out:%+04.0f", (double)a_out);
+            OLED_PrintASCIIString(64, 48, line, &afont16x8, OLED_COLOR_NORMAL);
             break;
         }
 
@@ -146,9 +152,9 @@ void StartUITask(void *argument)
         case STATE_DEBUG:
             if (debug_origin == STATE_PENDULUM) {
                 /*
-                 * 从倒立摆进 DEBUG：调角度环 PID，目标固定 2048
+                 * 从倒立摆进 DEBUG：调角度环 PID，目标固定 PENDULUM_ANGLE_TARGET
                  *   左半屏：角度环 Kp / Ki / Kd
-                 *   右半屏：Tgt=2048 / Act=角度实测 / Out=PWM
+                 *   右半屏：Tgt=PENDULUM_ANGLE_TARGET / Act=角度实测 / Out=PWM
                  */
                 float akp = pendulum_angle_Kp;
                 float aki = pendulum_angle_Ki;
@@ -160,7 +166,7 @@ void StartUITask(void *argument)
 
                 sprintf(line, "Kp:%.2f", (double)akp);
                 OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
-                sprintf(line, "Tgt:2048 ");
+                sprintf(line, "Tgt:%-4u", PENDULUM_ANGLE_TARGET);
                 OLED_PrintASCIIString(64, 16, line, &afont16x8, OLED_COLOR_NORMAL);
 
                 sprintf(line, "Ki:%.2f", (double)aki);

@@ -415,7 +415,7 @@ void StartFsmTask(void *argument)
         /* Step 6：DEBUG 模式 — 按来源模式分流                                 */
         /*                                                                */
         /*   从定速/定位进 DEBUG → 4 路旋钮调 MotorTask PID + Target         */
-        /*   从倒立摆进 DEBUG   → 3 路旋钮调角度环 PID，Target 固定 2048      */
+        /*   从倒立摆进 DEBUG   → 3 路旋钮调角度环 PID，Target 固定 PENDULUM_ANGLE_TARGET */
         /* ================================================================ */
 
         if (cur == STATE_DEBUG) {
@@ -426,7 +426,7 @@ void StartFsmTask(void *argument)
                  *   RP1 → 角度环 KP（0 ~ PENDULUM_KP_MAX）
                  *   RP2 → 角度环 KI（0 ~ PENDULUM_KI_MAX）
                  *   RP3 → 角度环 KD（0 ~ PENDULUM_KD_MAX）
-                 *   RP4 → 不使用（目标固定 2048）
+                 *   RP4 → 不使用（目标固定 PENDULUM_ANGLE_TARGET）
                  *   PID 参数通过 volatile 变量直接传给 PendulumTask
                  */
                 RP_ReadAll(&rp_data, 3);  // 只读前 3 路

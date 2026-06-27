@@ -124,6 +124,8 @@ extern volatile float    Out;            /**< PID 输出（PWM 占空比） */
 extern volatile float    ErrorInt;       /**< PID 误差积分 Σe */
 extern volatile float    PosSpeedLimit;  /**< 位置模式速度上限 */
 
+#define PENDULUM_ANGLE_TARGET  2059  /**< 倒立摆角度目标（ADC 值，0~4095） */
+
 /* ========================================================================== */
 /* 倒立摆跨任务变量（PendulumTask 写入，UITask / SerialTask 读取）               */
 /* ========================================================================== */
@@ -133,7 +135,7 @@ extern volatile uint8_t  pendulum_cmd;        /**< FsmTask 写入的命令（PEN
 extern volatile uint16_t pendulum_angle_raw;  /**< 角度传感器原始值（0~4095） */
 extern volatile int16_t  pendulum_angle_err;  /**< 角度误差（角度目标 - 实际） */
 extern volatile float    pendulum_pwm;        /**< 角度环 PWM 输出（-100~+100） */
-extern volatile uint16_t pendulum_angle_tgt;  /**< 角度目标 = 2048 + 位置环偏移 */
+extern volatile uint16_t pendulum_angle_tgt;  /**< 角度目标 = PENDULUM_ANGLE_TARGET + 位置环偏移 */
 extern volatile float    pendulum_angle_Kp;   /**< 角度环 Kp */
 extern volatile float    pendulum_angle_Ki;   /**< 角度环 Ki */
 extern volatile float    pendulum_angle_Kd;   /**< 角度环 Kd */

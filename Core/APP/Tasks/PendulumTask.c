@@ -8,7 +8,7 @@
  *
  * ============================== 控制架构 ==============================
  *
- *                  角度目标 = ADC_MIDPOINT(2048)
+ *                  角度目标 = PENDULUM_ANGLE_TARGET(2055)
  *                        │
  *                        ▼
  *   角度传感器 ──→ (+) ──→ [角度环 PID] ──→ PWM ──→ TB6612
@@ -16,7 +16,7 @@
  *                   │
  *              角度反馈
  *
- * - 单环（角度环）：(2048 - 角度实测) → PWM
+ * - 单环（角度环）：(PENDULUM_ANGLE_TARGET - 角度实测) → PWM
  * - 控制频率：200Hz（osDelay(5)）
  * - 角度基准：2048（12 位 ADC 中点 = 摆杆竖直向上；ADC 量程 0~4095 → 2048=50%）
  *
@@ -75,9 +75,9 @@
 /* 角度环 PID 参数（角度误差 → PWM）                                            */
 /* ========================================================================== */
 
-#define ANGLE_KP        0.4f   /**< 角度环比例 */
-#define ANGLE_KI        0.01f    /**< 角度环积分 */
-#define ANGLE_KD        0.4f   /**< 角度环微分 */
+#define ANGLE_KP        0.30f   /**< 角度环比例 */
+#define ANGLE_KI        0.00f    /**< 角度环积分 */
+#define ANGLE_KD        2.00f   /**< 角度环微分 */
 #define ANGLE_OUT_MAX   100.0f  /**< PWM 输出限幅 ±100% */
 
 /* ========================================================================== */
@@ -96,7 +96,7 @@ volatile uint8_t  pendulum_cmd       = PENDULUM_CMD_NONE;
 volatile uint16_t pendulum_angle_raw = 0;
 volatile int16_t  pendulum_angle_err = 0;
 volatile float    pendulum_pwm       = 0.0f;
-volatile uint16_t pendulum_angle_tgt = 2048;
+volatile uint16_t pendulum_angle_tgt = PENDULUM_ANGLE_TARGET;
 volatile float    pendulum_angle_Kp  = ANGLE_KP;
 volatile float    pendulum_angle_Ki  = ANGLE_KI;
 volatile float    pendulum_angle_Kd  = ANGLE_KD;
@@ -229,11 +229,11 @@ void StartPendulumTask(void *argument)
         case PENDULUM_BALANCING: {
             /*
              * 角度环：
-             *   角度目标 = 2048（竖直向上）
-             *   角度误差 = 2048 - angle_raw
+             *   角度目标 = PENDULUM_ANGLE_TARGET（竖直向上）
+             *   角度误差 = PENDULUM_ANGLE_TARGET - angle_raw
              *   → PID_PositionalSpeed → PWM
              */
-            float angle_target = 2048.0f;
+            float angle_target = (float)PENDULUM_ANGLE_TARGET;
             float angle_error  = angle_target - (float)(int32_t)angle_raw;
             pendulum_angle_err = (int16_t)angle_error;
 
@@ -314,7 +314,7 @@ void StartPendulumTask(void *argument)
         /* ================================================================ */
         pendulum_substate = substate;
         pendulum_pwm      = pwm_out;
-        pendulum_angle_tgt = 2048;
+        pendulum_angle_tgt = PENDULUM_ANGLE_TARGET;
 
         osDelay(5);  // 200Hz
     }
