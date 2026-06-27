@@ -87,7 +87,7 @@
 /** @brief 倒立摆角度环 PID 调参量程（独立于电机 PID） */
 #define PENDULUM_KP_MAX  1.0f
 #define PENDULUM_KI_MAX  1.0f
-#define PENDULUM_KD_MAX  1.0f
+#define PENDULUM_KD_MAX  9.0f
 
 /** @brief 定速模式目标速度量程上限（RPM），用于 DEBUG 模式旋钮映射 */
 #define TARGET_MAX    150.0f
@@ -403,16 +403,12 @@ void StartFsmTask(void *argument)
 
         if (cur == STATE_PENDULUM) {
             /*
-             * 倒立摆模式 — K1/K2/K3 通过 volatile 标志位传给 PendulumTask：
+             * 倒立摆模式 — K1 通过 volatile 标志位传给 PendulumTask：
              *   K1 → 启动/停止（切换 PENDULUM_CMD_TOGGLE）
-             *   K2 → 顺时针旋转一圈（PENDULUM_CMD_ROTATE_CW）
-             *   K3 → 逆时针旋转一圈（PENDULUM_CMD_ROTATE_CCW）
              *
              * PendulumTask 每 5ms 读取并清零 pendulum_cmd，不阻塞。
              */
             if (k1_click) pendulum_cmd = PENDULUM_CMD_TOGGLE;
-            if (k2_click) pendulum_cmd = PENDULUM_CMD_ROTATE_CW;
-            if (k3_click) pendulum_cmd = PENDULUM_CMD_ROTATE_CCW;
         }
 
         /* ================================================================ */

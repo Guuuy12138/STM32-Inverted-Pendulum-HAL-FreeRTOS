@@ -100,7 +100,7 @@ static const uint8_t table[STATE_COUNT][EVT_COUNT] = {
         [EVT_K4_LONG]  = STATE_DEBUG,            // K4L → 调参
     },
 
-    /* ---- PENDULUM 倒立摆（占位） ---- */
+    /* ---- PENDULUM 倒立摆 ---- */
     [STATE_PENDULUM] = {
         [EVT_K1_CLICK] = STATE_PENDULUM,
         [EVT_K2_CLICK] = STATE_PENDULUM,

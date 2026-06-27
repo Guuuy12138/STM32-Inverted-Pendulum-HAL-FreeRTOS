@@ -118,53 +118,20 @@ void StartUITask(void *argument)
             uint16_t a_act = pendulum_angle_raw;
             float    a_out = pendulum_pwm;
 
-            /* 位置环参数 */
-            float    pkp  = pendulum_pos_Kp;
-            float    pki  = pendulum_pos_Ki;
-            float    pkd  = pendulum_pos_Kd;
-            int32_t  p_tgt = pendulum_pos_tgt;
-            int32_t  p_act = pendulum_position;
-            float    p_out = pendulum_pos_out;
+            /* y=0: 标题 */
+            OLED_PrintASCIIString(0, 0, "   PENDULUM    ", &afont16x8, OLED_COLOR_NORMAL);
 
-            /* y=0: 标题行 — Angle | Location */
-            OLED_PrintASCIIString(0, 0, "Angle", &afont8x6, OLED_COLOR_NORMAL);
-            OLED_PrintASCIIString(64, 0, "Location", &afont8x6, OLED_COLOR_NORMAL);
+            /* y=16: Kp + Ki */
+            sprintf(line, "Kp:%.2f Ki:%.2f", (double)akp, (double)aki);
+            OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
 
-            /* y=10: Kp 行 */
-            sprintf(line, "Kp:%.3f", (double)akp);
-            OLED_PrintASCIIString(0, 10, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Kp:%.3f", (double)pkp);
-            OLED_PrintASCIIString(64, 10, line, &afont8x6, OLED_COLOR_NORMAL);
+            /* y=32: Kd + Tgt */
+            sprintf(line, "Kd:%.2f Tgt:%4u", (double)akd, (unsigned int)a_tgt);
+            OLED_PrintASCIIString(0, 32, line, &afont16x8, OLED_COLOR_NORMAL);
 
-            /* y=18: Ki 行 */
-            sprintf(line, "Ki:%.3f", (double)aki);
-            OLED_PrintASCIIString(0, 18, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Ki:%.3f", (double)pki);
-            OLED_PrintASCIIString(64, 18, line, &afont8x6, OLED_COLOR_NORMAL);
-
-            /* y=26: Kd 行 */
-            sprintf(line, "Kd:%.3f", (double)akd);
-            OLED_PrintASCIIString(0, 26, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Kd:%.3f", (double)pkd);
-            OLED_PrintASCIIString(64, 26, line, &afont8x6, OLED_COLOR_NORMAL);
-
-            /* y=34: Tar 行 */
-            sprintf(line, "Tar:%-4u", (unsigned int)a_tgt);
-            OLED_PrintASCIIString(0, 34, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Tar:%+04d", (int)p_tgt);
-            OLED_PrintASCIIString(64, 34, line, &afont8x6, OLED_COLOR_NORMAL);
-
-            /* y=42: Act 行 */
-            sprintf(line, "Act:%-4u", (unsigned int)a_act);
-            OLED_PrintASCIIString(0, 42, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Act:%+04d", (int)p_act);
-            OLED_PrintASCIIString(64, 42, line, &afont8x6, OLED_COLOR_NORMAL);
-
-            /* y=50: Out 行 */
-            sprintf(line, "Out:%+04.0f", (double)a_out);
-            OLED_PrintASCIIString(0, 50, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Out:%+04.0f", (double)p_out);
-            OLED_PrintASCIIString(64, 50, line, &afont8x6, OLED_COLOR_NORMAL);
+            /* y=48: Act + Out */
+            sprintf(line, "Act:%4u Out:%+4.0f", (unsigned int)a_act, (double)a_out);
+            OLED_PrintASCIIString(0, 48, line, &afont16x8, OLED_COLOR_NORMAL);
             break;
         }
 

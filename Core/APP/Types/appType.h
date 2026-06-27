@@ -29,7 +29,6 @@
  *   PendulumTask 不使用消息队列，而是通过 volatile 标志位传递命令：
  *     FsmTask 写 pendulum_cmd → PendulumTask 读取后清零
  *     PENDULUM_CMD_TOGGLE — 启动/停止
- *     PENDULUM_CMD_ROTATE_CW / CCW — 顺时针/逆时针旋转一圈
  *
  *   DEBUG 模式下 PendulumTask PID 参数通过 volatile float 变量直接传递：
  *     pendulum_angle_Kp / Ki / Kd — FsmTask 写，PendulumTask 每周期同步
@@ -60,9 +59,8 @@ typedef enum {
 
 typedef enum {
     PENDULUM_IDLE       = 0,  /**< 待机，等待 K1 启动 */
-    PENDULUM_SWING_UP   = 1,  /**< 能量法起摆 */
-    PENDULUM_BALANCING  = 2,  /**< 双环 PID 平衡保持 */
-    PENDULUM_FALLEN     = 3,  /**< 倾倒保护，刹停 */
+    PENDULUM_BALANCING  = 1,  /**< 单环 PID 平衡保持 */
+    PENDULUM_FALLEN     = 2,  /**< 倾倒保护，刹停 */
 } PendulumSubState;
 
 /* ========================================================================== */
@@ -83,8 +81,6 @@ typedef enum {
 
 #define PENDULUM_CMD_NONE       0  /**< 无命令 */
 #define PENDULUM_CMD_TOGGLE     1  /**< K1 启动/停止 */
-#define PENDULUM_CMD_ROTATE_CW  2  /**< K2 顺时针一圈 */
-#define PENDULUM_CMD_ROTATE_CCW 3  /**< K3 逆时针一圈 */
 
 /* ========================================================================== */
 /* 电机命令（FsmTask → MotorTask 消息队列）                                     */
@@ -136,18 +132,10 @@ extern volatile uint8_t  pendulum_substate;   /**< 当前子状态（PENDULUM_ID
 extern volatile uint8_t  pendulum_cmd;        /**< FsmTask 写入的命令（PENDULUM_CMD_xxx） */
 extern volatile uint16_t pendulum_angle_raw;  /**< 角度传感器原始值（0~4095） */
 extern volatile int16_t  pendulum_angle_err;  /**< 角度误差（角度目标 - 实际） */
-extern volatile int32_t  pendulum_position;   /**< 编码器累计位置 */
 extern volatile float    pendulum_pwm;        /**< 角度环 PWM 输出（-100~+100） */
 extern volatile uint16_t pendulum_angle_tgt;  /**< 角度目标 = 2048 + 位置环偏移 */
 extern volatile float    pendulum_angle_Kp;   /**< 角度环 Kp */
 extern volatile float    pendulum_angle_Ki;   /**< 角度环 Ki */
 extern volatile float    pendulum_angle_Kd;   /**< 角度环 Kd */
-
-/* 位置环（外环）参数 — 供 UI 显示和 DEBUG 调节 */
-extern volatile float    pendulum_pos_Kp;     /**< 位置环 Kp */
-extern volatile float    pendulum_pos_Ki;     /**< 位置环 Ki */
-extern volatile float    pendulum_pos_Kd;     /**< 位置环 Kd */
-extern volatile int32_t  pendulum_pos_tgt;    /**< 位置目标（编码器计数） */
-extern volatile float    pendulum_pos_out;    /**< 位置环输出（角度偏移量） */
 
 #endif //STM32_INVERTED_PENDULUM_APPTYPE_H
