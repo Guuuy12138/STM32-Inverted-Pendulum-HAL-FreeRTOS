@@ -96,8 +96,8 @@ typedef enum {
 #define CMD_UPDATE_PID   0x07  /**< 更新 Kp/Ki/Kd（旋钮调节） */
 #define CMD_ADJUST_UP        0x08  /**< 目标值 + 步长（按键调节） */
 #define CMD_ADJUST_DOWN      0x09  /**< 目标值 - 步长（按键调节） */
-#define CMD_SPD_LIMIT_UP     0x0A  /**< 速度上限 + 步长（按键调节） */
-#define CMD_SPD_LIMIT_DOWN   0x0B  /**< 速度上限 - 步长（按键调节） */
+#define CMD_SPEED_LIMIT_UP     0x0A  /**< 速度上限 + 步长（按键调节） */
+#define CMD_SPEED_LIMIT_DOWN   0x0B  /**< 速度上限 - 步长（按键调节） */
 
 /** @brief 消息结构体（16 字节，与队列 Item Size 一致） */
 typedef struct {
@@ -113,31 +113,31 @@ typedef struct {
 
 extern volatile int      current_state;       /**< 当前系统状态，由 FSM 模块写入 */
 extern volatile int      debug_origin_state;  /**< 进入 DEBUG 前的状态（UITask 分流显示） */
-extern volatile int16_t  speed;          /**< 编码器单周期增量（原始 counts） */
-extern volatile int32_t  location;       /**< 编码器累计位置（原始 counts） */
-extern volatile float    Kp;             /**< PID 比例系数 */
-extern volatile float    Ki;             /**< PID 积分系数 */
-extern volatile float    Kd;             /**< PID 微分系数 */
-extern volatile float    Target;         /**< 目标值（counts/周期） */
-extern volatile float    Actual;         /**< 实际测量值（counts/周期） */
-extern volatile float    Out;            /**< PID 输出（PWM 占空比） */
-extern volatile float    ErrorInt;       /**< PID 误差积分 Σe */
-extern volatile float    PosSpeedLimit;  /**< 位置模式速度上限 */
+extern volatile int16_t  motor_speed;          /**< 编码器单周期增量（原始 counts） */
+extern volatile int32_t  motor_position;       /**< 编码器累计位置（原始 counts） */
+extern volatile float    motor_kp;             /**< PID 比例系数 */
+extern volatile float    motor_ki;             /**< PID 积分系数 */
+extern volatile float    motor_kd;             /**< PID 微分系数 */
+extern volatile float    motor_target;         /**< 目标值（counts/周期） */
+extern volatile float    motor_actual;         /**< 实际测量值（counts/周期） */
+extern volatile float    motor_out;            /**< PID 输出（PWM 占空比） */
+extern volatile float    motor_error_int;       /**< PID 误差积分 Σe */
+extern volatile float    pos_speed_limit;  /**< 位置模式速度上限 */
 
-#define PENDULUM_ANGLE_TARGET  2058   /**< 倒立摆角度目标（ADC 值，0~4095） */
+#define ANGLE_TARGET  2058   /**< 倒立摆角度目标（ADC 值，0~4095） */
 
 /* ========================================================================== */
 /* 倒立摆跨任务变量（PendulumTask 写入，UITask / SerialTask 读取）               */
 /* ========================================================================== */
 
-extern volatile uint8_t  pendulum_substate;   /**< 当前子状态（PENDULUM_IDLE ~ PENDULUM_FALLEN） */
+extern volatile uint8_t  pendulum_state;   /**< 当前子状态（PENDULUM_IDLE ~ PENDULUM_FALLEN） */
 extern volatile uint8_t  pendulum_cmd;        /**< FsmTask 写入的命令（PENDULUM_CMD_xxx） */
-extern volatile uint16_t pendulum_angle_raw;  /**< 角度传感器原始值（0~4095） */
-extern volatile int16_t  pendulum_angle_err;  /**< 角度误差（角度目标 - 实际） */
-extern volatile float    pendulum_pwm;        /**< 角度环 PWM 输出（-100~+100） */
-extern volatile uint16_t pendulum_angle_tgt;  /**< 角度目标 = PENDULUM_ANGLE_TARGET + 位置环偏移 */
-extern volatile float    pendulum_angle_Kp;   /**< 角度环 Kp */
-extern volatile float    pendulum_angle_Ki;   /**< 角度环 Ki */
-extern volatile float    pendulum_angle_Kd;   /**< 角度环 Kd */
+extern volatile uint16_t angle_raw;  /**< 角度传感器原始值（0~4095） */
+extern volatile int16_t  angle_err;  /**< 角度误差（角度目标 - 实际） */
+extern volatile float    angle_out;        /**< 角度环 PWM 输出（-100~+100） */
+extern volatile uint16_t angle_target;  /**< 角度目标 = ANGLE_TARGET + 位置环偏移 */
+extern volatile float    angle_kp;   /**< 角度环 Kp */
+extern volatile float    angle_ki;   /**< 角度环 Ki */
+extern volatile float    angle_kd;   /**< 角度环 Kd */
 
 #endif //STM32_INVERTED_PENDULUM_APPTYPE_H

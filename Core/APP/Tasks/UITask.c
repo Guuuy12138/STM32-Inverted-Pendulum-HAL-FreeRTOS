@@ -47,9 +47,9 @@ void StartUITask(void *argument)
         /* ---- 快照 ---- */
         int   state = current_state;
         int   debug_origin = debug_origin_state;
-        float kp = Kp, ki = Ki, kd = Kd;
-        float t  = Target, a = Actual, o = Out;
-        float spl = PosSpeedLimit;
+        float kp = motor_kp, ki = motor_ki, kd = motor_kd;
+        float t  = motor_target, a = motor_actual, o = motor_out;
+        float spl = pos_speed_limit;
 
         /* ================================================================ */
         /* 根据系统状态渲染不同界面                                           */
@@ -111,12 +111,12 @@ void StartUITask(void *argument)
         /* ---- 倒立摆 ---- */
         case STATE_PENDULUM: {
             /* 角度环参数 */
-            float    akp  = pendulum_angle_Kp;
-            float    aki  = pendulum_angle_Ki;
-            float    akd  = pendulum_angle_Kd;
-            uint16_t a_tgt = pendulum_angle_tgt;
-            uint16_t a_act = pendulum_angle_raw;
-            float    a_out = pendulum_pwm;
+            float    akp  = angle_kp;
+            float    aki  = angle_ki;
+            float    akd  = angle_kd;
+            uint16_t a_tgt = angle_target;
+            uint16_t a_act = angle_raw;
+            float    a_out = angle_out;
 
             /* y=0: 标题 */
             OLED_PrintASCIIString(0, 0, "   PENDULUM    ", &afont16x8, OLED_COLOR_NORMAL);
@@ -152,21 +152,21 @@ void StartUITask(void *argument)
         case STATE_DEBUG:
             if (debug_origin == STATE_PENDULUM) {
                 /*
-                 * 从倒立摆进 DEBUG：调角度环 PID，目标固定 PENDULUM_ANGLE_TARGET
+                 * 从倒立摆进 DEBUG：调角度环 PID，目标固定 ANGLE_TARGET
                  *   左半屏：角度环 Kp / Ki / Kd
-                 *   右半屏：Tgt=PENDULUM_ANGLE_TARGET / Act=角度实测 / Out=PWM
+                 *   右半屏：Tgt=ANGLE_TARGET / Act=角度实测 / Out=PWM
                  */
-                float akp = pendulum_angle_Kp;
-                float aki = pendulum_angle_Ki;
-                float akd = pendulum_angle_Kd;
-                uint16_t raw = pendulum_angle_raw;
-                float    pwm = pendulum_pwm;
+                float akp = angle_kp;
+                float aki = angle_ki;
+                float akd = angle_kd;
+                uint16_t raw = angle_raw;
+                float    pwm = angle_out;
 
                 OLED_PrintASCIIString(48, 0, "TUNE", &afont16x8, OLED_COLOR_NORMAL);
 
                 sprintf(line, "Kp:%.2f", (double)akp);
                 OLED_PrintASCIIString(0, 16, line, &afont16x8, OLED_COLOR_NORMAL);
-                sprintf(line, "Tgt:%-4u", PENDULUM_ANGLE_TARGET);
+                sprintf(line, "Tgt:%-4u", ANGLE_TARGET);
                 OLED_PrintASCIIString(64, 16, line, &afont16x8, OLED_COLOR_NORMAL);
 
                 sprintf(line, "Ki:%.2f", (double)aki);

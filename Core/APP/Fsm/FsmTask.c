@@ -85,9 +85,9 @@
 #define KD_MAX        2.0f
 
 /** @brief 倒立摆角度环 PID 调参量程（独立于电机 PID） */
-#define PENDULUM_KP_MAX  1.0f
-#define PENDULUM_KI_MAX  1.0f
-#define PENDULUM_KD_MAX  9.0f
+#define ANGLE_KP_MAX  1.0f
+#define ANGLE_KI_MAX  1.0f
+#define ANGLE_KD_MAX  9.0f
 
 /** @brief 定速模式目标速度量程上限（RPM），用于 DEBUG 模式旋钮映射 */
 #define TARGET_MAX    150.0f
@@ -96,7 +96,7 @@
 #define SPEED_STEP       10.0f
 
 /** @brief DEBUG 模式下 K1/K2 调节速度上限的步长（RPM/次） */
-#define SPD_LIMIT_STEP   5.0f
+#define SPEED_LIMIT_STEP   5.0f
 
 /** @brief 定位模式下旋钮映射的目标位置最大值（编码器脉冲） */
 #define POS_TARGET_MAX   400.0f
@@ -423,21 +423,21 @@ void StartFsmTask(void *argument)
             if (debug_origin_state == STATE_PENDULUM) {
                 /*
                  * 从倒立摆进 DEBUG：
-                 *   RP1 → 角度环 KP（0 ~ PENDULUM_KP_MAX）
-                 *   RP2 → 角度环 KI（0 ~ PENDULUM_KI_MAX）
-                 *   RP3 → 角度环 KD（0 ~ PENDULUM_KD_MAX）
+                 *   RP1 → 角度环 KP（0 ~ ANGLE_KP_MAX）
+                 *   RP2 → 角度环 KI（0 ~ ANGLE_KI_MAX）
+                 *   RP3 → 角度环 KD（0 ~ ANGLE_KD_MAX）
                  *   RP4 → 不使用（目标固定 PENDULUM_ANGLE_TARGET）
                  *   PID 参数通过 volatile 变量直接传给 PendulumTask
                  */
                 RP_ReadAll(&rp_data, 3);  // 只读前 3 路
 
-                float kp = rp_data.percent[0] * PENDULUM_KP_MAX / 100.0f;
-                float ki = rp_data.percent[1] * PENDULUM_KI_MAX / 100.0f;
-                float kd = rp_data.percent[2] * PENDULUM_KD_MAX / 100.0f;
+                float kp = rp_data.percent[0] * ANGLE_KP_MAX / 100.0f;
+                float ki = rp_data.percent[1] * ANGLE_KI_MAX / 100.0f;
+                float kd = rp_data.percent[2] * ANGLE_KD_MAX / 100.0f;
 
-                pendulum_angle_Kp = kp;
-                pendulum_angle_Ki = ki;
-                pendulum_angle_Kd = kd;
+                angle_kp = kp;
+                angle_ki = ki;
+                angle_kd = kd;
 
                 /* K1 → 启动/停止（不因进入 DEBUG 而失效） */
                 if (k1_click) pendulum_cmd = PENDULUM_CMD_TOGGLE;
@@ -462,8 +462,8 @@ void StartFsmTask(void *argument)
 
                 /* K1/K2 功能按来源模式分流 */
                 if (debug_origin_state == STATE_MOTOR_POSITION) {
-                    if (k1_click) send_cmd(CMD_SPD_LIMIT_UP,   SPD_LIMIT_STEP, 0, 0);
-                    if (k2_click) send_cmd(CMD_SPD_LIMIT_DOWN, SPD_LIMIT_STEP, 0, 0);
+                    if (k1_click) send_cmd(CMD_SPEED_LIMIT_UP,   SPEED_LIMIT_STEP, 0, 0);
+                    if (k2_click) send_cmd(CMD_SPEED_LIMIT_DOWN, SPEED_LIMIT_STEP, 0, 0);
                 } else {
                     if (k1_click) send_cmd(CMD_ADJUST_UP,   SPEED_STEP, 0, 0);
                     if (k2_click) send_cmd(CMD_ADJUST_DOWN, SPEED_STEP, 0, 0);

@@ -8,7 +8,7 @@
  *
  * ============================== 控制架构 ==============================
  *
- *                  角度目标 = PENDULUM_ANGLE_TARGET(2055)
+ *                  角度目标 = ANGLE_TARGET(2055)
  *                        │
  *                        ▼
  *   角度传感器 ──→ (+) ──→ [角度环 PID] ──→ PWM ──→ TB6612
@@ -16,7 +16,7 @@
  *                   │
  *              角度反馈
  *
- * - 单环（角度环）：(PENDULUM_ANGLE_TARGET - 角度实测) → PWM
+ * - 单环（角度环）：(ANGLE_TARGET - 角度实测) → PWM
  * - 控制频率：200Hz（osDelay(5)）
  * - 角度基准：2048（12 位 ADC 中点 = 摆杆竖直向上；ADC 量程 0~4095 → 2048=50%）
  *
@@ -49,7 +49,7 @@
  *    因为 StartPendulumTask 从不返回（无限循环），其栈帧在整个任务生命周期
  *    内持续存在，局部变量天然具有"持久"语义，不需要 static。
  *
- * 3. `pid_angle.Kp != pendulum_angle_Kp` — 先判等再赋值，避免每周期
+ * 3. `pid_angle.Kp != angle_kp` — 先判等再赋值，避免每周期
  *    无条件写入 PID 结构体（减少不必要的内存写入，虽对正确性无影响）。
  *    volatile 的 float 读取在 Cortex-M3 上天然原子（单条 LDR 指令），
  *    与 PendulumTask 的写入无竞态（两任务不同时写同一变量）。
@@ -84,22 +84,22 @@
 /* 安全参数                                                                    */
 /* ========================================================================== */
 
-#define FALL_THRESHOLD  1500    /**< 倾倒判定：|raw - 2048| > 1500（约 ±73%） */
+#define FALL_LIMIT  1500    /**< 倾倒判定：|raw - 2048| > 1500（约 ±73%） */
 #define MAX_PWM         90u     /**< PWM 输出硬上限（放宽以增加控制权） */
 
 /* ========================================================================== */
 /* 跨任务共享变量（定义在此，声明在 appType.h）                                  */
 /* ========================================================================== */
 
-volatile uint8_t  pendulum_substate  = PENDULUM_IDLE;
+volatile uint8_t  pendulum_state  = PENDULUM_IDLE;
 volatile uint8_t  pendulum_cmd       = PENDULUM_CMD_NONE;
-volatile uint16_t pendulum_angle_raw = 0;
-volatile int16_t  pendulum_angle_err = 0;
-volatile float    pendulum_pwm       = 0.0f;
-volatile uint16_t pendulum_angle_tgt = PENDULUM_ANGLE_TARGET;
-volatile float    pendulum_angle_Kp  = ANGLE_KP;
-volatile float    pendulum_angle_Ki  = ANGLE_KI;
-volatile float    pendulum_angle_Kd  = ANGLE_KD;
+volatile uint16_t angle_raw = 0;
+volatile int16_t  angle_err = 0;
+volatile float    angle_out       = 0.0f;
+volatile uint16_t angle_target = ANGLE_TARGET;
+volatile float    angle_kp  = ANGLE_KP;
+volatile float    angle_ki  = ANGLE_KI;
+volatile float    angle_kd  = ANGLE_KD;
 
 /* ========================================================================== */
 /* 任务入口                                                                     */
@@ -182,10 +182,10 @@ void StartPendulumTask(void *argument)
                 pwm_out = 0.0f;
                 was_active = false;
 
-                pendulum_substate = PENDULUM_IDLE;
-                pendulum_angle_raw = 0;
-                pendulum_angle_err = 0;
-                pendulum_pwm       = 0.0f;
+                pendulum_state = PENDULUM_IDLE;
+                angle_raw = 0;
+                angle_err = 0;
+                angle_out       = 0.0f;
             }
             osDelay(5);
             continue;
@@ -205,7 +205,7 @@ void StartPendulumTask(void *argument)
         /* 步骤 2：读取角度传感器                                              */
         /* ================================================================ */
         uint16_t angle_raw = ANGLE_GetRaw();
-        pendulum_angle_raw = angle_raw;
+        angle_raw = angle_raw;
 
         /* ================================================================ */
         /* 步骤 3：子状态机调度                                              */
@@ -229,13 +229,13 @@ void StartPendulumTask(void *argument)
         case PENDULUM_BALANCING: {
             /*
              * 角度环：
-             *   角度目标 = PENDULUM_ANGLE_TARGET（竖直向上）
-             *   角度误差 = PENDULUM_ANGLE_TARGET - angle_raw
+             *   角度目标 = ANGLE_TARGET（竖直向上）
+             *   角度误差 = ANGLE_TARGET - angle_raw
              *   → PID_PositionalSpeed → PWM
              */
-            float angle_target = (float)PENDULUM_ANGLE_TARGET;
+            float angle_target = (float)ANGLE_TARGET;
             float angle_error  = angle_target - (float)(int32_t)angle_raw;
-            pendulum_angle_err = (int16_t)angle_error;
+            angle_err = (int16_t)angle_error;
 
             /*
              * PID 参数实时同步：
@@ -245,9 +245,9 @@ void StartPendulumTask(void *argument)
              * 并发安全：FsmTask（生产者）写入，本任务（消费者）读取后同步——
              * 本任务不反向写这些变量，不存在竞争。
              */
-            if (pid_angle.Kp != pendulum_angle_Kp) pid_angle.Kp = pendulum_angle_Kp;
-            if (pid_angle.Ki != pendulum_angle_Ki) pid_angle.Ki = pendulum_angle_Ki;
-            if (pid_angle.Kd != pendulum_angle_Kd) pid_angle.Kd = pendulum_angle_Kd;
+            if (pid_angle.Kp != angle_kp) pid_angle.Kp = angle_kp;
+            if (pid_angle.Ki != angle_ki) pid_angle.Ki = angle_ki;
+            if (pid_angle.Kd != angle_kd) pid_angle.Kd = angle_kd;
 
             /*
              * 角度环 PID 调用：
@@ -283,7 +283,7 @@ void StartPendulumTask(void *argument)
             /* ---------- 倾倒检测 ---------- */
             {
                 int32_t raw_err = (int32_t)angle_raw - 2048;
-                if (raw_err > FALL_THRESHOLD || raw_err < -FALL_THRESHOLD) {
+                if (raw_err > FALL_LIMIT || raw_err < -FALL_LIMIT) {
                     TB6612_Stop(MOTOR_A);
                     pwm_out = 0.0f;
                     substate = PENDULUM_FALLEN;
@@ -312,9 +312,9 @@ void StartPendulumTask(void *argument)
         /* ================================================================ */
         /* 步骤 4：更新全局变量（供 UITask 显示）                             */
         /* ================================================================ */
-        pendulum_substate = substate;
-        pendulum_pwm      = pwm_out;
-        pendulum_angle_tgt = PENDULUM_ANGLE_TARGET;
+        pendulum_state = substate;
+        angle_out      = pwm_out;
+        angle_target = ANGLE_TARGET;
 
         osDelay(5);  // 200Hz
     }

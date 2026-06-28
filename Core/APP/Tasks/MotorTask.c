@@ -25,7 +25,7 @@
 // ==========================================================================
 //
 //   收 FsmTask 发来的 MotorCmd → 速度/位置 PID → PWM → TB6612
-//   更新 volatile 全局变量（speed/location/Kp/Ki/Kd/Target/Actual/Out）
+//   更新 volatile 全局变量（speed/motor_position/Kp/Ki/Kd/Target/motor_actual/motor_out）
 //     供 UITask / SerialTask 跨任务读取显示
 //
 // ==========================================================================
@@ -52,27 +52,27 @@
 /*   内环（速度环）= 复用 pid_speed 的参数                                      */
 /* 为什么外环 Ki=0：定位不需要持续积分——静差由内环速度 PI 的积分项自然消除       */
 /* ========================================================================== */
-#define FIXED_KP_SPEED      0.35f   /**< 速度环比例 */
-#define FIXED_KI_SPEED      0.45f   /**< 速度环积分 */
-#define FIXED_KD_SPEED      0.0f    /**< 速度环微分（=0，不用 D） */
-#define FIXED_KP_POS        0.45f   /**< 位置环比例 */
-#define FIXED_KI_POS        0.0f    /**< 位置环积分（=0，纯 PD） */
-#define FIXED_KD_POS        0.2f    /**< 位置环微分 */
+#define SPEED_KP      0.35f   /**< 速度环比例 */
+#define SPEED_KI      0.45f   /**< 速度环积分 */
+#define SPEED_KD      0.0f    /**< 速度环微分（=0，不用 D） */
+#define POS_KP        0.45f   /**< 位置环比例 */
+#define POS_KI        0.0f    /**< 位置环积分（=0，纯 PD） */
+#define POS_KD        0.2f    /**< 位置环微分 */
 
 /* ========================================================================== */
 /* 限幅常量                                                                    */
 /*                                                                            */
 /* SPEED_TARGET_MAX：定速模式目标值上限（单位 counts/周期）                      */
 /* POS_TARGET_MAX：  定位模式目标值上限（单位 counts）                            */
-/* SPD_LIMIT_STEP：  速度上限每次按键加减的步长                                  */
-/* SPD_LIMIT_DEFAULT：速度上限初始值（= SPEED_TARGET_MAX，不限制）                */
-/* SPD_LIMIT_MIN：    速度下限最小值——不能为 0，否则定位模式下电机卡死            */
+/* SPEED_LIMIT_STEP：  速度上限每次按键加减的步长                                  */
+/* SPEED_LIMIT_DEFAULT：速度上限初始值（= SPEED_TARGET_MAX，不限制）                */
+/* SPEED_LIMIT_MIN：    速度下限最小值——不能为 0，否则定位模式下电机卡死            */
 /* ========================================================================== */
 #define SPEED_TARGET_MAX    150.0f   /**< 定速目标上限 */
 #define POS_TARGET_MAX      400.0f   /**< 定位目标上限 */
-#define SPD_LIMIT_STEP      5.0f     /**< 速度上限每次加减步长 */
-#define SPD_LIMIT_DEFAULT   150.0f   /**< 速度上限默认值（= 全速） */
-#define SPD_LIMIT_MIN       5.0f     /**< 速度上限最小值（不能为 0） */
+#define SPEED_LIMIT_STEP      5.0f     /**< 速度上限每次加减步长 */
+#define SPEED_LIMIT_DEFAULT   150.0f   /**< 速度上限默认值（= 全速） */
+#define SPEED_LIMIT_MIN       5.0f     /**< 速度上限最小值（不能为 0） */
 
 /* ========================================================================== */
 /* 内部子模式 — MotorTask 自己的运行状态                                        */
@@ -101,29 +101,29 @@ extern osMessageQueueId_t motorCmdQueueHandle;
 /*                                                                            */
 /* 变量速查：                                                                   */
 /*   speed      = 编码器单周期增量（counts/40ms），正值=正转，负值=反转        */
-/*   location   = 编码器累计位置（counts），每周期 += speed                     */
+/*   motor_position   = 编码器累计位置（counts），每周期 += speed                     */
 /*   Kp/Ki/Kd   = 当前生效的 PID 参数（正常模式=固定值，调参模式=旋钮值）       */
 /*   Target     = 当前目标值                                                   */
 /*               定速模式 → 速度目标（counts/周期）                            */
 /*               定位模式 → 位置目标（counts）                                 */
-/*   Actual     = 当前实际测量值                                                */
+/*   motor_actual     = 当前实际测量值                                                */
 /*               定速模式 → 速度实际值（counts/周期）                          */
 /*               定位模式 → 位置实际值（counts）                               */
-/*   Out        = PID 计算输出（-100 ~ +100），直接映射 PWM 占空比              */
+/*   motor_out        = PID 计算输出（-100 ~ +100），直接映射 PWM 占空比              */
 /*   ErrorInt   = 误差积分（显示用，DebugTask 读取）                            */
-/*   PosSpeedLimit = 定位模式下内环速度上限（可调）                             */
+/*   pos_speed_limit = 定位模式下内环速度上限（可调）                             */
 /* ========================================================================== */
 
-volatile int16_t  speed    = 0;                     /**< 编码器增量 */
-volatile int32_t  location = 0;                     /**< 编码器累计位置 */
-volatile float    Kp       = FIXED_KP_SPEED;       /**< 当前 Kp */
-volatile float    Ki       = FIXED_KI_SPEED;       /**< 当前 Ki */
-volatile float    Kd       = FIXED_KD_SPEED;       /**< 当前 Kd */
-volatile float    Target   = 0.0f;                  /**< 当前目标值 */
-volatile float    Actual   = 0.0f;                  /**< 当前测量值 */
-volatile float    Out      = 0.0f;                  /**< PID 输出（PWM 占空比） */
-volatile float    ErrorInt = 0.0f;                  /**< 误差积分（显示用） */
-volatile float    PosSpeedLimit = SPD_LIMIT_DEFAULT; /**< 定位模式速度上限 */
+volatile int16_t  motor_speed    = 0;                     /**< 编码器增量 */
+volatile int32_t  motor_position = 0;                     /**< 编码器累计位置 */
+volatile float    motor_kp       = SPEED_KP;       /**< 当前 Kp */
+volatile float    motor_ki       = SPEED_KI;       /**< 当前 Ki */
+volatile float    motor_kd       = SPEED_KD;       /**< 当前 Kd */
+volatile float    motor_target   = 0.0f;                  /**< 当前目标值 */
+volatile float    motor_actual   = 0.0f;                  /**< 当前测量值 */
+volatile float    motor_out      = 0.0f;                  /**< PID 输出（PWM 占空比） */
+volatile float    motor_error_int = 0.0f;                  /**< 误差积分（显示用） */
+volatile float    pos_speed_limit = SPEED_LIMIT_DEFAULT; /**< 定位模式速度上限 */
 
 /* ========================================================================== */
 /* 任务入口                                                                    */
@@ -174,8 +174,8 @@ void StartMotorTask(void *argument)
     static PID_TypeDef pid_speed;     // 速度环 PID 实例
     static PID_TypeDef pid_position;  // 位置环 PID 实例
 
-    PID_Init(&pid_speed,    FIXED_KP_SPEED, FIXED_KI_SPEED, FIXED_KD_SPEED, 100, -100);
-    PID_Init(&pid_position, FIXED_KP_POS,   FIXED_KI_POS,   FIXED_KD_POS,   100, -100);
+    PID_Init(&pid_speed,    SPEED_KP, SPEED_KI, SPEED_KD, 100, -100);
+    PID_Init(&pid_position, POS_KP,   POS_KI,   POS_KD,   100, -100);
 
     /* ====================================================================== */
     /* 运行时状态                                                              */
@@ -244,14 +244,14 @@ void StartMotorTask(void *argument)
             case CMD_SPEED:
                 sub_mode = SUB_SPEED;
                 pid = &pid_speed;
-                pid->Kp = Kp = FIXED_KP_SPEED;
-                pid->Ki = Ki = FIXED_KI_SPEED;
-                pid->Kd = Kd = FIXED_KD_SPEED;
-                Target = 0;
+                pid->Kp = motor_kp = SPEED_KP;
+                pid->Ki = motor_ki = SPEED_KI;
+                pid->Kd = motor_kd = SPEED_KD;
+                motor_target = 0;
                 PID_Clear(pid);
                 ENCODER_Reset();
                 ENCODER_GetDelta();  // 虚读一次，同步 last_cnt
-                location = 0;
+                motor_position = 0;
                 break;
 
             /* ============================================================= *
@@ -261,9 +261,9 @@ void StartMotorTask(void *argument)
              *                                                               *
              * 串级双环结构：                                                  *
              *   外环（位置环）— PD 控制                                     *
-             *     输入：位置目标 Target vs 累计位置 location                  *
+             *     输入：位置目标 Target vs 累计位置 motor_position                  *
              *     输出：速度指令 speed_setpoint（送入内环）                   *
-             *     限幅：±PosSpeedLimit（可调，用 K1/K2 调整）                *
+             *     限幅：±pos_speed_limit（可调，用 K1/K2 调整）                *
              *     为什么不用 I：静差由内环速度 PI 的积分项消除                *
              *                                                               *
              *   内环（速度环）— PI 控制                                      *
@@ -273,7 +273,7 @@ void StartMotorTask(void *argument)
              *                                                               *
              * 动作：                                                         *
              *   - 子模式切到 SUB_POSITION                                   *
-             *   - 外环 pid_position 用 PosSpeedLimit 动态限幅               *
+             *   - 外环 pid_position 用 pos_speed_limit 动态限幅               *
              *   - 内环 pid_speed 只清状态，不动参数（复用已调好的参数）       *
              *   - 清零目标 + 重置编码器 + 清 PID 历史 + 虚读同步             *
              * ============================================================= */
@@ -282,13 +282,13 @@ void StartMotorTask(void *argument)
                 pid = &pid_position;
 
                 /* 外环限幅 = 当前速度上限（运行时可调） */
-                PID_Init(&pid_position, FIXED_KP_POS, FIXED_KI_POS, FIXED_KD_POS,
-                         PosSpeedLimit, -PosSpeedLimit);
+                PID_Init(&pid_position, POS_KP, POS_KI, POS_KD,
+                         pos_speed_limit, -pos_speed_limit);
 
-                Kp = FIXED_KP_POS;
-                Ki = FIXED_KI_POS;
-                Kd = FIXED_KD_POS;
-                Target = 0;
+                motor_kp = POS_KP;
+                motor_ki = POS_KI;
+                motor_kd = POS_KD;
+                motor_target = 0;
 
                 /* 内环不清参，只清历史状态 */
                 PID_Clear(&pid_speed);
@@ -296,8 +296,8 @@ void StartMotorTask(void *argument)
                 PID_Clear(&pid_position);
                 ENCODER_Reset();
                 ENCODER_GetDelta();  // 虚读一次，同步 last_cnt
-                location = 0;
-                Actual = 0;
+                motor_position = 0;
+                motor_actual = 0;
                 break;
 
             /* ============================================================= *
@@ -315,8 +315,8 @@ void StartMotorTask(void *argument)
                 TB6612_Run(MOTOR_A, MOTOR_BRAKE, 100);  // 全速刹车
                 osDelay(50);                              // 刹 50ms
                 TB6612_Stop(MOTOR_A);                    // 停转
-                Target = 0;
-                Out = 0;
+                motor_target = 0;
+                motor_out = 0;
                 PID_Clear(pid);                          // 清 PID 历史，防下次启动突变
                 sub_mode = SUB_IDLE;                     // 进入空闲态，电机不再出力
                 break;
@@ -351,9 +351,9 @@ void StartMotorTask(void *argument)
             case CMD_DEBUG_EXIT:
                 sub_mode = prev_sub_mode;                         // 恢复子模式
                 pid = (sub_mode == SUB_POSITION) ? &pid_position : &pid_speed;
-                pid->Kp = Kp = save_kp;                            // 恢复 Kp
-                pid->Ki = Ki = save_ki;                            // 恢复 Ki
-                pid->Kd = Kd = save_kd;                            // 恢复 Kd
+                pid->Kp = motor_kp = save_kp;                            // 恢复 Kp
+                pid->Ki = motor_ki = save_ki;                            // 恢复 Ki
+                pid->Kd = motor_kd = save_kd;                            // 恢复 Kd
                 PID_Clear(pid);                                    // 清历史
                 break;
 
@@ -364,7 +364,7 @@ void StartMotorTask(void *argument)
              * 参数：cmd.value1 = 新目标值                                   *
              * ============================================================= */
             case CMD_UPDATE_TGT:
-                Target = cmd.value1;
+                motor_target = cmd.value1;
                 break;
 
             /* ============================================================= *
@@ -375,12 +375,12 @@ void StartMotorTask(void *argument)
              * 同时更新全局变量（供 UI 显示）和 PID 实例（实际生效）            *
              * ============================================================= */
             case CMD_UPDATE_PID:
-                Kp = cmd.value1;      // 全局变量 ← 供 UI 显示
-                Ki = cmd.value2;
-                Kd = cmd.value3;
-                pid->Kp = Kp;         // PID 实例 ← 实际生效
-                pid->Ki = Ki;
-                pid->Kd = Kd;
+                motor_kp = cmd.value1;      // 全局变量 ← 供 UI 显示
+                motor_ki = cmd.value2;
+                motor_kd = cmd.value3;
+                pid->Kp = motor_kp;         // PID 实例 ← 实际生效
+                pid->Ki = motor_ki;
+                pid->Kd = motor_kd;
                 break;
 
             /* ============================================================= *
@@ -394,8 +394,8 @@ void StartMotorTask(void *argument)
             case CMD_ADJUST_UP: {
                 float step = cmd.value1;
                 float limit = (sub_mode == SUB_POSITION) ? POS_TARGET_MAX : SPEED_TARGET_MAX;
-                Target += step;
-                if (Target > limit) Target = limit;    // 上限裁切
+                motor_target += step;
+                if (motor_target > limit) motor_target = limit;    // 上限裁切
                 break;
             }
 
@@ -408,39 +408,39 @@ void StartMotorTask(void *argument)
             case CMD_ADJUST_DOWN: {
                 float step = cmd.value1;
                 float limit = (sub_mode == SUB_POSITION) ? POS_TARGET_MAX : SPEED_TARGET_MAX;
-                Target -= step;
-                if (Target < -limit) Target = -limit;  // 下限裁切
+                motor_target -= step;
+                if (motor_target < -limit) motor_target = -limit;  // 下限裁切
                 break;
             }
 
             /* ============================================================= *
-             * CMD_SPD_LIMIT_UP — 速度上限上调                                   *
+             * CMD_SPEED_LIMIT_UP — 速度上限上调                                   *
              *                                                               *
              * 来源：FsmTask（定位模式下按 K1+K3 组合键等）                    *
              * 限幅：不超过 SPEED_TARGET_MAX（150）                            *
              * 生效：定位模式下直接更新 pid_position 的输出限幅              *
-             *       在 IDLE/SPEED 下只改 PosSpeedLimit 变量，下次进 POS 再用 *
+             *       在 IDLE/SPEED 下只改 pos_speed_limit 变量，下次进 POS 再用 *
              * ============================================================= */
-            case CMD_SPD_LIMIT_UP:
-                PosSpeedLimit += cmd.value1;
-                if (PosSpeedLimit > SPEED_TARGET_MAX) PosSpeedLimit = SPEED_TARGET_MAX;
+            case CMD_SPEED_LIMIT_UP:
+                pos_speed_limit += cmd.value1;
+                if (pos_speed_limit > SPEED_TARGET_MAX) pos_speed_limit = SPEED_TARGET_MAX;
                 if (sub_mode == SUB_POSITION) {
-                    pid_position.outMax =  PosSpeedLimit;   // 实时生效
-                    pid_position.outMin = -PosSpeedLimit;
+                    pid_position.outMax =  pos_speed_limit;   // 实时生效
+                    pid_position.outMin = -pos_speed_limit;
                 }
                 break;
 
             /* ============================================================= *
-             * CMD_SPD_LIMIT_DOWN — 速度上限下调                               *
+             * CMD_SPEED_LIMIT_DOWN — 速度上限下调                               *
              *                                                               *
-             * 限幅：不低于 SPD_LIMIT_MIN（5），否则定位模式下电机卡死         *
+             * 限幅：不低于 SPEED_LIMIT_MIN（5），否则定位模式下电机卡死         *
              * ============================================================= */
-            case CMD_SPD_LIMIT_DOWN:
-                PosSpeedLimit -= cmd.value1;
-                if (PosSpeedLimit < SPD_LIMIT_MIN) PosSpeedLimit = SPD_LIMIT_MIN;
+            case CMD_SPEED_LIMIT_DOWN:
+                pos_speed_limit -= cmd.value1;
+                if (pos_speed_limit < SPEED_LIMIT_MIN) pos_speed_limit = SPEED_LIMIT_MIN;
                 if (sub_mode == SUB_POSITION) {
-                    pid_position.outMax =  PosSpeedLimit;   // 实时生效
-                    pid_position.outMin = -PosSpeedLimit;
+                    pid_position.outMax =  pos_speed_limit;   // 实时生效
+                    pid_position.outMin = -pos_speed_limit;
                 }
                 break;
 
@@ -455,15 +455,15 @@ void StartMotorTask(void *argument)
         /* ENCODER_GetDelta() 返回自上次调用以来的增量（counts），              */
         /* 内部自动清空并更新 last_cnt。                                       */
         /*                                                                   */
-        /* 始终运行（包括 IDLE 和 DEBUG 模式）— UITask 需要 speed/location    */
+        /* 始终运行（包括 IDLE 和 DEBUG 模式）— UITask 需要 speed/motor_position    */
         /* 实时显示。即使电机不转，也要读编码器把 delta 清掉，防止积压。        */
         /*                                                                   */
         /* speed    = 当前周期速度（delta/周期），正=正转，负=反转            */
-        /* location = 累计位置，每周期累加 delta                              */
+        /* motor_position = 累计位置，每周期累加 delta                              */
         /* ================================================================== */
         int16_t delta = ENCODER_GetDelta();
-        speed    = delta;           // 更新全局速度（供 UI 显示）
-        location += delta;          // 累加位置
+        motor_speed    = delta;           // 更新全局速度（供 UI 显示）
+        motor_position += delta;          // 累加位置
 
         /* ================================================================== */
         /* 步骤 3：控制计算                                                    */
@@ -471,61 +471,61 @@ void StartMotorTask(void *argument)
         /* 三种情况的 PID 计算：                                                */
         /*                                                                   */
         /* [SUB_SPEED] 定速 — 单环速度 PID                                    */
-        /*   Actual = delta（速度实际值）                                     */
-        /*   误差 = Target - delta → 速度 PID → Out（PWM）                    */
+        /*   motor_actual = delta（速度实际值）                                     */
+        /*   误差 = Target - delta → 速度 PID → motor_out（PWM）                    */
         /*                                                                   */
         /* [SUB_POSITION] 定位 — 串级双环                                     */
-        /*   外环：误差位置 = Target - location → 位置 PD → speed_setpoint    */
-        /*   内环：误差速度 = speed_setpoint - delta → 速度 PI → Out（PWM）   */
+        /*   外环：误差位置 = Target - motor_position → 位置 PD → speed_setpoint    */
+        /*   内环：误差速度 = speed_setpoint - delta → 速度 PI → motor_out（PWM）   */
         /*                                                                   */
-        /* [SUB_IDLE] 空闲 — Out=0，电机不动                                   */
-        /*   Actual 也清零，让 UI 显示 0 而不是上一次的残值                   */
+        /* [SUB_IDLE] 空闲 — motor_out=0，电机不动                                   */
+        /*   motor_actual 也清零，让 UI 显示 0 而不是上一次的残值                   */
         /* ================================================================== */
         if (sub_mode == SUB_SPEED) {
-            Actual = (float)delta;                        // 实际速度 = 当前增量
-            PID_SetTarget(pid, Target);                  // 设定速度目标
-            Out = PID_PositionalSpeed(pid, Actual);      // 速度 PI → PWM
-            ErrorInt = pid->ErrorInt;                     // 更新全局积分（显示用）
+            motor_actual = (float)delta;                        // 实际速度 = 当前增量
+            PID_SetTarget(pid, motor_target);                  // 设定速度目标
+            motor_out = PID_PositionalSpeed(pid, motor_actual);      // 速度 PI → PWM
+            motor_error_int = pid->ErrorInt;                     // 更新全局积分（显示用）
         } else if (sub_mode == SUB_POSITION) {
-            Actual = (float)location;                     // 外环反馈 = 累计位置
+            motor_actual = (float)motor_position;                     // 外环反馈 = 累计位置
 
             /* 外环（位置环）：位置误差 → 速度指令 */
-            PID_SetTarget(&pid_position, Target);
-            float speed_setpoint = PID_PositionalPosition(&pid_position, Actual);
+            PID_SetTarget(&pid_position, motor_target);
+            float speed_setpoint = PID_PositionalPosition(&pid_position, motor_actual);
 
             /* 内环（速度环）：速度误差 → PWM */
             PID_SetTarget(&pid_speed, speed_setpoint);
-            Out = PID_PositionalSpeed(&pid_speed, (float)delta);
+            motor_out = PID_PositionalSpeed(&pid_speed, (float)delta);
 
-            ErrorInt = pid_position.ErrorInt;             // 显示外环积分
+            motor_error_int = pid_position.ErrorInt;             // 显示外环积分
         } else {
-            /* IDLE — 电机不转，Out=0，Actual=0 */
-            Out    = 0.0f;
-            Actual = 0.0f;
+            /* IDLE — 电机不转，motor_out=0，motor_actual=0 */
+            motor_out    = 0.0f;
+            motor_actual = 0.0f;
         }
 
         /* ================================================================== */
         /* 步骤 4：PWM 输出到 TB6612 电机驱动                                   */
         /*                                                                   */
-        /* Out 范围 = -100.0 ~ +100.0，含义：                                  */
-        /*   Out > +0.5  → 正转（顺时针），PWM = |Out| 取整到 0~100           */
-        /*   Out < -0.5  → 反转（逆时针），PWM = |Out| 取整到 0~100           */
-        /*   |Out| ≤ 0.5 → 死区，停转（防止微小抖动导致电机嗡嗡响）           */
+        /* motor_out 范围 = -100.0 ~ +100.0，含义：                                  */
+        /*   motor_out > +0.5  → 正转（顺时针），PWM = |motor_out| 取整到 0~100           */
+        /*   motor_out < -0.5  → 反转（逆时针），PWM = |motor_out| 取整到 0~100           */
+        /*   |motor_out| ≤ 0.5 → 死区，停转（防止微小抖动导致电机嗡嗡响）           */
         /*                                                                   */
-        /* 四舍五入： (Out + 0.5f) 强转 uint8_t，即 floor(Out + 0.5)         */
+        /* 四舍五入： (motor_out + 0.5f) 强转 uint8_t，即 floor(motor_out + 0.5)         */
         /* 上限裁切： PWM > 100 时截断为 100（TB6612 占空比上限）             */
         /* ================================================================== */
-        if (Out > 0.5f) {
+        if (motor_out > 0.5f) {
             /* 正转 */
-            uint8_t pwm = (Out >= 100.0f) ? 100 : (uint8_t)(Out + 0.5f);
+            uint8_t pwm = (motor_out >= 100.0f) ? 100 : (uint8_t)(motor_out + 0.5f);
             TB6612_Run(MOTOR_A, MOTOR_CW, pwm);
-        } else if (Out < -0.5f) {
+        } else if (motor_out < -0.5f) {
             /* 反转 */
-            float abs_out = -Out;                          // 取绝对值
+            float abs_out = -motor_out;                          // 取绝对值
             uint8_t pwm = (abs_out >= 100.0f) ? 100 : (uint8_t)(abs_out + 0.5f);
             TB6612_Run(MOTOR_A, MOTOR_CCW, pwm);
         } else {
-            /* 死区：Out 在 [-0.5, 0.5] 之间，停转 */
+            /* 死区：motor_out 在 [-0.5, 0.5] 之间，停转 */
             TB6612_Stop(MOTOR_A);
         }
 

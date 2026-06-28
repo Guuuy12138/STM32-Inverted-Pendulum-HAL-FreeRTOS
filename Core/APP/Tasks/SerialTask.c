@@ -46,10 +46,10 @@ void StartSerialTask(void *argument)
         if (current_state == STATE_DEBUG) {
             int len = sprintf(tx_buf,
                 "%.0f,%.0f,%.0f,%.0f\r\n",
-                (double)Target,
-                (double)Actual,
-                (double)Out,
-                (double)ErrorInt);
+                (double)motor_target,
+                (double)motor_actual,
+                (double)motor_out,
+                (double)motor_error_int);
             /* 超时 100ms = 5 周期（远大于 ~3ms 的传输时间），只在硬件故障时触发 */
             (void)HAL_UART_Transmit(&huart1, (uint8_t *)tx_buf, len, 100);
         }
