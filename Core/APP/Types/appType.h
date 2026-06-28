@@ -81,6 +81,8 @@ typedef enum {
 
 #define PENDULUM_CMD_NONE       0  /**< 无命令 */
 #define PENDULUM_CMD_TOGGLE     1  /**< K1 启动/停止 */
+#define PENDULUM_CMD_FWD        2  /**< K2 正转一圈 */
+#define PENDULUM_CMD_REV        3  /**< K3 反转一圈 */
 
 /* ========================================================================== */
 /* 电机命令（FsmTask → MotorTask 消息队列）                                     */
@@ -140,5 +142,6 @@ extern volatile float    angle_kp;   /**< 角度环 Kp */
 extern volatile float    angle_ki;   /**< 角度环 Ki */
 extern volatile float    angle_kd;   /**< 角度环 Kd */
 extern volatile float    pos_offset;     /**< 位置环输出（叠加到角度目标） */
+extern volatile int32_t  pos_target;     /**< 位置环目标值（K2/K3 调节） */
 
 #endif //STM32_INVERTED_PENDULUM_APPTYPE_H

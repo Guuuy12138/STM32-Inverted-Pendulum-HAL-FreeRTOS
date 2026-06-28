@@ -82,10 +82,11 @@
 /* ========================================================================== */
 
 #define POS_KP          0.40f   /**< 位置环比例 */
-#define POS_KI          0.01f   /**< 位置环积分（消除位置静差） */
+#define POS_KI          0.00f   /**< 位置环积分（消除位置静差） */
 #define POS_KD          4.00f   /**< 位置环微分 */
 #define POS_OUT_MAX     100.0f  /**< 位置环输出限幅（角度偏移上限） */
 #define POS_DIVIDER     10      /**< 位置环分频：5ms × 10 = 50ms */
+#define POS_TARGET_MAX  4080    /**< 位置目标限幅：±10 圈（408 counts/圈） */
 
 /* ========================================================================== */
 /* 安全参数                                                                    */
@@ -108,6 +109,7 @@ volatile float    angle_kp  = ANGLE_KP;
 volatile float    angle_ki  = ANGLE_KI;
 volatile float    angle_kd  = ANGLE_KD;
 volatile float    pos_offset;       /**< 位置环输出（叠加到角度目标） */
+volatile int32_t  pos_target;       /**< 位置环目标值（K2/K3 调节，±10 圈） */
 
 /* ========================================================================== */
 /* 任务入口                                                                     */
@@ -161,6 +163,7 @@ void StartPendulumTask(void *argument)
     float            pwm_out = 0.0f;             // 最终 PWM 输出
     int32_t          motor_pos = 0;              // 编码器累计位置（本地）
     float            pos_off   = 0.0f;           // 位置环输出（本地）
+    int32_t          pos_tgt   = 0;              // 位置目标（本地）
     uint8_t          pos_cnt   = 0;              // 位置环计次分频
 
     /**
@@ -247,9 +250,11 @@ void StartPendulumTask(void *argument)
                 ENCODER_Reset();
                 motor_pos = 0;
                 pos_off   = 0.0f;
+                pos_tgt   = 0;
                 pos_cnt   = 0;
                 motor_position = 0;
                 pos_offset = 0.0f;
+                pos_target = 0;
                 substate = PENDULUM_BALANCING;
             }
             break;
@@ -306,9 +311,10 @@ void StartPendulumTask(void *argument)
             pos_cnt++;
             if (pos_cnt >= POS_DIVIDER) {
                 pos_cnt = 0;
-                PID_SetTarget(&pid_position, 0.0f);
+                PID_SetTarget(&pid_position, (float)pos_tgt);
                 pos_off = PID_PositionalPosition(&pid_position, (float)motor_pos);
                 pos_offset = pos_off;
+                pos_target = pos_tgt;
             }
 
             /* K1：停止 */
@@ -316,6 +322,16 @@ void StartPendulumTask(void *argument)
                 TB6612_Stop(MOTOR_A);
                 pwm_out = 0.0f;
                 substate = PENDULUM_IDLE;
+            }
+
+            /* K2/K3：正转/反转一圈 */
+            if (cmd == PENDULUM_CMD_FWD) {
+                pos_tgt += 408;
+                if (pos_tgt > POS_TARGET_MAX) pos_tgt = POS_TARGET_MAX;
+            }
+            if (cmd == PENDULUM_CMD_REV) {
+                pos_tgt -= 408;
+                if (pos_tgt < -POS_TARGET_MAX) pos_tgt = -POS_TARGET_MAX;
             }
 
             /* ---------- 倾倒检测 ---------- */

@@ -25,6 +25,10 @@
 #include "encoder.h"
 #include "tim.h"    /* htim3 (TIM3 句柄) */
 
+/* GetDelta 的状态放文件作用域，供 Reset 同步清零 */
+static uint16_t delta_last = 0;
+static uint8_t  delta_init = 1;
+
 /* ========================================================================== */
 /*                           公开 API 函数                                    */
 /* ========================================================================== */
@@ -71,6 +75,7 @@ int16_t ENCODER_GetCount(void)
 void ENCODER_Reset(void)
 {
     __HAL_TIM_SET_COUNTER(&htim3, 0);
+    delta_init = 1;  // 同步复位 GetDelta 的 static 状态，避免假增量
 }
 
 /**
@@ -88,17 +93,15 @@ void ENCODER_Reset(void)
  */
 int16_t ENCODER_GetDelta(void)
 {
-    static uint16_t last_cnt = 0;
-    static uint8_t  first_call = 1;
     uint16_t now = htim3.Instance->CNT;
 
-    if (first_call) {
-        last_cnt = now;
-        first_call = 0;
+    if (delta_init) {
+        delta_last = now;
+        delta_init = 0;
         return 0;
     }
 
-    int16_t delta = (int16_t)(now - last_cnt);
-    last_cnt = now;
+    int16_t delta = (int16_t)(now - delta_last);
+    delta_last = now;
     return delta;
 }
