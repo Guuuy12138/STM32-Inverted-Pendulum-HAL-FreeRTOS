@@ -118,7 +118,6 @@ void StartUITask(void *argument)
             float    a_out = angle_out;
             float    p_out = pos_offset;
             int32_t  p_loc = motor_position;
-            int32_t  p_tgt = pos_target;
 
             /* 标题 */
             OLED_PrintASCIIString(0,  0, "Angle",    &afont8x6, OLED_COLOR_NORMAL);
@@ -145,7 +144,7 @@ void StartUITask(void *argument)
             /* Target */
             sprintf(line, "Tar:%4u", (unsigned int)a_tgt);
             OLED_PrintASCIIString(0,  40, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Tar:%+05.0f", (double)p_tgt);
+            sprintf(line, "Tar:%+05.0f", 0.0);
             OLED_PrintASCIIString(64, 40, line, &afont8x6, OLED_COLOR_NORMAL);
 
             /* Actual */
@@ -183,7 +182,6 @@ void StartUITask(void *argument)
                 float    a_out = angle_out;
                 float    p_out = pos_offset;
                 int32_t  p_loc = motor_position;
-                int32_t  p_tgt = pos_target;
 
                 /* 标题（DEBUG 时左标题改为 TUNE） */
                 OLED_PrintASCIIString(0,  0, "TUNE",     &afont8x6, OLED_COLOR_NORMAL);
@@ -206,7 +204,7 @@ void StartUITask(void *argument)
 
                 sprintf(line, "Tar:%4u", (unsigned int)angle_target);
                 OLED_PrintASCIIString(0,  40, line, &afont8x6, OLED_COLOR_NORMAL);
-                sprintf(line, "Tar:%+05.0f", (double)p_tgt);
+                sprintf(line, "Tar:%+05.0f", 0.0);
                 OLED_PrintASCIIString(64, 40, line, &afont8x6, OLED_COLOR_NORMAL);
 
                 sprintf(line, "Act:%-4u", (unsigned int)raw);
