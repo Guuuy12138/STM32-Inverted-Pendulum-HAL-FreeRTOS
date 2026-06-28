@@ -76,8 +76,8 @@
 /* ========================================================================== */
 
 #define ANGLE_KP        0.30f   /**< 角度环比例 */
-#define ANGLE_KI        0.00f    /**< 角度环积分 */
-#define ANGLE_KD        2.00f   /**< 角度环微分 */
+#define ANGLE_KI        0.01f   /**< 角度环积分（对齐参考工程，消除稳态偏差） */
+#define ANGLE_KD        0.40f   /**< 角度环微分（对齐参考工程，避免噪声放大） */
 #define ANGLE_OUT_MAX   100.0f  /**< PWM 输出限幅 ±100% */
 
 /* ========================================================================== */
@@ -85,7 +85,7 @@
 /* ========================================================================== */
 
 #define FALL_THRESHOLD  1500    /**< 倾倒判定：|raw - 2048| > 1500（约 ±73%） */
-#define MAX_PWM         80u     /**< PWM 输出硬上限 */
+#define MAX_PWM         90u     /**< PWM 输出硬上限（放宽以增加控制权） */
 
 /* ========================================================================== */
 /* 跨任务共享变量（定义在此，声明在 appType.h）                                  */
@@ -260,11 +260,11 @@ void StartPendulumTask(void *argument)
             pwm_out = angle_pwm;
 
             /* ---------- PWM 输出（死区 + 限幅）---------- */
-            if (angle_pwm > 0.5f) {
+            if (angle_pwm > 0.2f) {
                 uint8_t pwm = (angle_pwm >= 100.0f) ? 100 : (uint8_t)(angle_pwm + 0.5f);
                 if (pwm > MAX_PWM) pwm = MAX_PWM;
                 TB6612_Run(MOTOR_A, MOTOR_CW, pwm);
-            } else if (angle_pwm < -0.5f) {
+            } else if (angle_pwm < -0.2f) {
                 float abs_pwm = -angle_pwm;
                 uint8_t pwm = (abs_pwm >= 100.0f) ? 100 : (uint8_t)(abs_pwm + 0.5f);
                 if (pwm > MAX_PWM) pwm = MAX_PWM;

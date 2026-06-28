@@ -241,9 +241,10 @@ static float PID_PositionalCore(PID_TypeDef *pid, float actual)
      *   当 SeparationEnabled=1 且 |error| > SeparationThreshold 时，
      *   跳过积分累加（冻结积分，不清零）。误差进入阈值范围后再恢复累加。
      *   作用：大幅调位时避免积分累积过多造成超调，接近目标时才启用积分消除静差。 */
-    if (!pid->SeparationEnabled ||
+    if (pid->Ki != 0.0f &&                         /* Ki=0 时不累加，防止无用积分胀死（对齐参考工程行为） */
+        (!pid->SeparationEnabled ||
         (pid->Error0 >= -pid->SeparationThreshold &&
-         pid->Error0 <=  pid->SeparationThreshold)) {
+         pid->Error0 <=  pid->SeparationThreshold))) {
         pid->ErrorInt += pid->Error0;
         pid->ErrorInt  = CLAMP(pid->ErrorInt, -pid->ErrorIntMax, pid->ErrorIntMax);
     }
@@ -273,8 +274,9 @@ static float PID_PositionalCore(PID_TypeDef *pid, float actual)
      *
      * 注意：只有本周期在 Step 2 中确实累加了积分，才允许撤回。
      *        如果积分分离导致本周期跳过了累加，这里也跳过撤回。 */
-    if ((output >= pid->outMax && pid->Error0 > 0.0f) ||
-        (output <= pid->outMin && pid->Error0 < 0.0f)) {
+    if (pid->Ki != 0.0f &&                         /* Step 2 中有积分累加才允许撤回（Ki=0 时不累加也不撤回） */
+        ((output >= pid->outMax && pid->Error0 > 0.0f) ||
+        (output <= pid->outMin && pid->Error0 < 0.0f))) {
         if (!pid->SeparationEnabled ||
             (pid->Error0 >= -pid->SeparationThreshold &&
              pid->Error0 <=  pid->SeparationThreshold)) {

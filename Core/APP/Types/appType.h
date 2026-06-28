@@ -124,7 +124,7 @@ extern volatile float    Out;            /**< PID 输出（PWM 占空比） */
 extern volatile float    ErrorInt;       /**< PID 误差积分 Σe */
 extern volatile float    PosSpeedLimit;  /**< 位置模式速度上限 */
 
-#define PENDULUM_ANGLE_TARGET  2059  /**< 倒立摆角度目标（ADC 值，0~4095） */
+#define PENDULUM_ANGLE_TARGET  2058   /**< 倒立摆角度目标（ADC 值，0~4095） */
 
 /* ========================================================================== */
 /* 倒立摆跨任务变量（PendulumTask 写入，UITask / SerialTask 读取）               */
