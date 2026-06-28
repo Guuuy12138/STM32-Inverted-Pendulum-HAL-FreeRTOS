@@ -240,46 +240,21 @@ void StartFsmTask(void *argument)
 
         /* ================================================================ */
         /* Step 2：K4 长按/短按判定                                          */
-        /*                                                                */
-        /* 按下 → 计数器累加；达到阈值 → 注入 EVT_K4_LONG                     */
-        /* 松手 → 未达阈值 → 注入 EVT_K4_CLICK（短按）                        */
-        /*                                                                */
-        /* LED 反馈：                                                       */
-        /*   - 按住期间每 200ms 翻转一次 LED（提示"正在计时"）                 */
-        /*   - 长按触发时快闪 3 下（确认"已识别长按"）                        */
         /* ================================================================ */
 
         if (k4_press) {
             key4_hold_cnt++;
-
-            /* 未达长按阈值时 LED 慢闪（200ms 周期）提示用户"按住有效" */
-            if (key4_hold_cnt < LONG_PRESS_CNT && (key4_hold_cnt % 10u) == 0) {
-                HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-            }
-
-            /* 刚好达到 2 秒 → 触发长按事件 + LED 快闪确认 */
             if (key4_hold_cnt == LONG_PRESS_CNT) {
                 new_state = fsm_dispatch(EVT_K4_LONG);
-
-                /* LED 快闪 3 下确认长按已识别 */
-                for (int i = 0; i < 3; i++) {
-                    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-                    osDelay(1);
-                    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
-                    osDelay(1);
-                }
             }
-
-            /* 超过阈值后锁住计数器，防止溢出回绕 */
             if (key4_hold_cnt > LONG_PRESS_CNT) {
                 key4_hold_cnt = LONG_PRESS_CNT;
             }
         } else {
-            /* K4 松手 → 判断是否有未完成的短按 */
             if (key4_hold_cnt > 0 && key4_hold_cnt < LONG_PRESS_CNT) {
                 new_state = fsm_dispatch(EVT_K4_CLICK);
             }
-            key4_hold_cnt = 0;  // 重置计数器，准备下一次按压
+            key4_hold_cnt = 0;
         }
 
         /* ================================================================ */
@@ -469,6 +444,13 @@ void StartFsmTask(void *argument)
                     if (k2_click) send_cmd(CMD_ADJUST_DOWN, SPEED_STEP, 0, 0);
                 }
             }
+        }
+
+        /* LED：倒立摆运行时亮起 */
+        if (cur == STATE_PENDULUM && pendulum_state == PENDULUM_BALANCING) {
+            HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+        } else {
+            HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
         }
 
         osDelay(20);  // 20ms 周期 = 50Hz

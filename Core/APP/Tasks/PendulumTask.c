@@ -230,6 +230,7 @@ void StartPendulumTask(void *argument)
 
         int16_t delta = ENCODER_GetDelta();
         motor_pos += delta;
+        if (motor_pos >  408 || motor_pos < -408) motor_pos = 0;
         motor_position = motor_pos;
 
         /* ================================================================ */
