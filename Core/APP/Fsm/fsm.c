@@ -106,7 +106,7 @@ static const uint8_t table[STATE_COUNT][EVT_COUNT] = {
         [EVT_K2_CLICK] = STATE_PENDULUM,
         [EVT_K3_CLICK] = STATE_PENDULUM,         // 自保持（无操作）
         [EVT_K4_CLICK] = STATE_MENU_MAIN,        // K4 → 返回主菜单
-        [EVT_K4_LONG]  = STATE_DEBUG,
+        [EVT_K4_LONG]  = STATE_PENDULUM,         // 不进 DEBUG，太危险
     },
 
     /* ---- DEBUG 调参模式 ---- */

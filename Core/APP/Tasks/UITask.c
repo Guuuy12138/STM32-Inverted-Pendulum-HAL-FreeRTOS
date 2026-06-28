@@ -118,6 +118,9 @@ void StartUITask(void *argument)
             float    a_out = angle_out;
             float    p_out = pos_offset;
             int32_t  p_loc = motor_position;
+            float    pkp   = pos_kp;
+            float    pki   = pos_ki;
+            float    pkd   = pos_kd;
 
             /* 标题 */
             OLED_PrintASCIIString(0,  0, "Angle",    &afont8x6, OLED_COLOR_NORMAL);
@@ -126,19 +129,19 @@ void StartUITask(void *argument)
             /* Kp */
             sprintf(line, "Kp:%.3f", (double)akp);
             OLED_PrintASCIIString(0,  12, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Kp:%.3f", 0.40);
+            sprintf(line, "Kp:%.3f", (double)pkp);
             OLED_PrintASCIIString(64, 12, line, &afont8x6, OLED_COLOR_NORMAL);
 
             /* Ki */
             sprintf(line, "Ki:%.3f", (double)aki);
             OLED_PrintASCIIString(0,  20, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Ki:%.3f", 0.01);
+            sprintf(line, "Ki:%.3f", (double)pki);
             OLED_PrintASCIIString(64, 20, line, &afont8x6, OLED_COLOR_NORMAL);
 
             /* Kd */
             sprintf(line, "Kd:%.3f", (double)akd);
             OLED_PrintASCIIString(0,  28, line, &afont8x6, OLED_COLOR_NORMAL);
-            sprintf(line, "Kd:%.3f", 4.0);
+            sprintf(line, "Kd:%.3f", (double)pkd);
             OLED_PrintASCIIString(64, 28, line, &afont8x6, OLED_COLOR_NORMAL);
 
             /* Target */
@@ -182,6 +185,9 @@ void StartUITask(void *argument)
                 float    a_out = angle_out;
                 float    p_out = pos_offset;
                 int32_t  p_loc = motor_position;
+                float    pkp   = pos_kp;
+                float    pki   = pos_ki;
+                float    pkd   = pos_kd;
 
                 /* 标题（DEBUG 时左标题改为 TUNE） */
                 OLED_PrintASCIIString(0,  0, "TUNE",     &afont8x6, OLED_COLOR_NORMAL);
@@ -189,17 +195,17 @@ void StartUITask(void *argument)
 
                 sprintf(line, "Kp:%.3f", (double)akp);
                 OLED_PrintASCIIString(0,  12, line, &afont8x6, OLED_COLOR_NORMAL);
-                sprintf(line, "Kp:%.3f", 0.40);
+                sprintf(line, "Kp:%.3f", (double)pkp);
                 OLED_PrintASCIIString(64, 12, line, &afont8x6, OLED_COLOR_NORMAL);
 
                 sprintf(line, "Ki:%.3f", (double)aki);
                 OLED_PrintASCIIString(0,  20, line, &afont8x6, OLED_COLOR_NORMAL);
-                sprintf(line, "Ki:%.3f", 0.01);
+                sprintf(line, "Ki:%.3f", (double)pki);
                 OLED_PrintASCIIString(64, 20, line, &afont8x6, OLED_COLOR_NORMAL);
 
                 sprintf(line, "Kd:%.3f", (double)akd);
                 OLED_PrintASCIIString(0,  28, line, &afont8x6, OLED_COLOR_NORMAL);
-                sprintf(line, "Kd:%.3f", 4.0);
+                sprintf(line, "Kd:%.3f", (double)pkd);
                 OLED_PrintASCIIString(64, 28, line, &afont8x6, OLED_COLOR_NORMAL);
 
                 sprintf(line, "Tar:%4u", (unsigned int)angle_target);

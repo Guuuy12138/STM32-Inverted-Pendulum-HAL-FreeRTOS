@@ -81,9 +81,9 @@
 /* 位置环 PID 参数（位置 → 角度偏移）                                           */
 /* ========================================================================== */
 
-#define POS_KP          0.40f   /**< 位置环比例 */
+#define POS_KP          0.35f   /**< 位置环比例 */
 #define POS_KI          0.00f   /**< 位置环积分（消除位置静差） */
-#define POS_KD          4.00f   /**< 位置环微分 */
+#define POS_KD          4.50f   /**< 位置环微分 */
 #define POS_OUT_MAX     100.0f  /**< 位置环输出限幅（角度偏移上限） */
 #define POS_DIVIDER     10      /**< 位置环分频：5ms × 10 = 50ms */
 
@@ -108,6 +108,9 @@ volatile float    angle_kp  = ANGLE_KP;
 volatile float    angle_ki  = ANGLE_KI;
 volatile float    angle_kd  = ANGLE_KD;
 volatile float    pos_offset;       /**< 位置环输出（叠加到角度目标） */
+volatile float    pos_kp = POS_KP;   /**< 位置环 Kp */
+volatile float    pos_ki = POS_KI;   /**< 位置环 Ki */
+volatile float    pos_kd = POS_KD;   /**< 位置环 Kd */
 
 /* ========================================================================== */
 /* 任务入口                                                                     */

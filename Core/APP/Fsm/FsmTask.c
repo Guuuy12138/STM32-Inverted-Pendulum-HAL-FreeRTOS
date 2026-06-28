@@ -403,8 +403,8 @@ void StartFsmTask(void *argument)
 
         if (cur == STATE_PENDULUM) {
             /*
-             * 倒立摆模式 — K1 通过 volatile 标志位传给 PendulumTask：
-             *   K1 → 启动/停止
+             * 倒立摆模式 — 按键通过 volatile 标志位传给 PendulumTask：
+             *   K1 → 启动/停止  K2 → 正转一圈  K3 → 反转一圈
              *
              * PendulumTask 每 5ms 读取并清零 pendulum_cmd，不阻塞。
              */
