@@ -139,5 +139,6 @@ extern volatile uint16_t angle_target;  /**< 角度目标 = ANGLE_TARGET + 位�
 extern volatile float    angle_kp;   /**< 角度环 Kp */
 extern volatile float    angle_ki;   /**< 角度环 Ki */
 extern volatile float    angle_kd;   /**< 角度环 Kd */
+extern volatile float    pos_offset;     /**< 位置环输出（叠加到角度目标） */
 
 #endif //STM32_INVERTED_PENDULUM_APPTYPE_H

@@ -4,20 +4,16 @@
  * @author  G
  * @date    2026/6/25
  *
- * 实现倒立摆控制流程：待机 → 单环 PID 平衡保持 → 倾倒保护。
+ * 实现倒立摆控制流程：待机 → 双环 PID 平衡保持 → 倾倒保护。
  *
- * ============================== 控制架构 ==============================
+ * ============================== 控制架构（串级双环）==============================
  *
- *                  角度目标 = ANGLE_TARGET(2055)
- *                        │
- *                        ▼
- *   角度传感器 ──→ (+) ──→ [角度环 PID] ──→ PWM ──→ TB6612
- *                   ▲
- *                   │
- *              角度反馈
+ *  位置目标=0 → [位置环PID,50ms] → 角度偏移 → ANGLE_TARGET - 偏移 → [角度环PID,5ms] → PWM
+ *                    ↑                                                           ↑
+ *              encoder累计位置                                               角度传感器
  *
- * - 单环（角度环）：(ANGLE_TARGET - 角度实测) → PWM
- * - 控制频率：200Hz（osDelay(5)）
+ * - 内环（角度环，5ms）：角度误差 → PWM，修正摆杆倾斜
+ * - 外环（位置环，50ms）：位置误差 → 角度偏移，把横杆拉回原点
  * - 角度基准：2048（12 位 ADC 中点 = 摆杆竖直向上；ADC 量程 0~4095 → 2048=50%）
  *
  * ============================== 子状态机 ==============================
@@ -66,6 +62,7 @@
 
 #include "cmsis_os.h"
 #include "angle.h"
+#include "encoder.h"
 #include "TB6612.h"
 #include "pid.h"
 #include "../Types/appType.h"
@@ -78,7 +75,17 @@
 #define ANGLE_KP        0.30f   /**< 角度环比例 */
 #define ANGLE_KI        0.01f   /**< 角度环积分（对齐参考工程，消除稳态偏差） */
 #define ANGLE_KD        0.40f   /**< 角度环微分（对齐参考工程，避免噪声放大） */
-#define ANGLE_OUT_MAX   100.0f  /**< PWM 输出限幅 ±100% */
+#define ANGLE_OUT_MAX   100.0f  /**< 角度环输出限幅 ±100% */
+
+/* ========================================================================== */
+/* 位置环 PID 参数（位置 → 角度偏移）                                           */
+/* ========================================================================== */
+
+#define POS_KP          0.40f   /**< 位置环比例 */
+#define POS_KI          0.01f   /**< 位置环积分（消除位置静差） */
+#define POS_KD          4.00f   /**< 位置环微分 */
+#define POS_OUT_MAX     100.0f  /**< 位置环输出限幅（角度偏移上限） */
+#define POS_DIVIDER     10      /**< 位置环分频：5ms × 10 = 50ms */
 
 /* ========================================================================== */
 /* 安全参数                                                                    */
@@ -100,6 +107,7 @@ volatile uint16_t angle_target = ANGLE_TARGET;
 volatile float    angle_kp  = ANGLE_KP;
 volatile float    angle_ki  = ANGLE_KI;
 volatile float    angle_kd  = ANGLE_KD;
+volatile float    pos_offset;       /**< 位置环输出（叠加到角度目标） */
 
 /* ========================================================================== */
 /* 任务入口                                                                     */
@@ -137,15 +145,23 @@ void StartPendulumTask(void *argument)
 
     /* ---- 一次性初始化 ---- */
     ANGLE_Init();
+    ENCODER_Init();
     TB6612_Init();
 
     /* 角度环：角度误差 → PWM */
     PID_TypeDef pid_angle;
     PID_Init(&pid_angle, ANGLE_KP, ANGLE_KI, ANGLE_KD, ANGLE_OUT_MAX, -ANGLE_OUT_MAX);
 
+    /* 位置环：位置 → 角度偏移 */
+    PID_TypeDef pid_position;
+    PID_Init(&pid_position, POS_KP, POS_KI, POS_KD, POS_OUT_MAX, -POS_OUT_MAX);
+
     /* ---- 持久状态（栈帧在整个任务生命周期内持续存在）---- */
     uint8_t          substate = PENDULUM_IDLE;    // 本地子状态
     float            pwm_out = 0.0f;             // 最终 PWM 输出
+    int32_t          motor_pos = 0;              // 编码器累计位置（本地）
+    float            pos_off   = 0.0f;           // 位置环输出（本地）
+    uint8_t          pos_cnt   = 0;              // 位置环计次分频
 
     /**
      * was_active — 检测状态退出边沿
@@ -186,6 +202,8 @@ void StartPendulumTask(void *argument)
                 angle_raw = 0;
                 angle_err = 0;
                 angle_out       = 0.0f;
+                pos_offset      = 0.0f;
+                motor_position  = 0;
             }
             osDelay(5);
             continue;
@@ -202,10 +220,14 @@ void StartPendulumTask(void *argument)
         }
 
         /* ================================================================ */
-        /* 步骤 2：读取角度传感器                                              */
+        /* 步骤 2：读取传感器                                                  */
         /* ================================================================ */
-        uint16_t angle_raw = ANGLE_GetRaw();
-        angle_raw = angle_raw;
+        uint16_t raw_angle = ANGLE_GetRaw();
+        angle_raw = raw_angle;
+
+        int16_t delta = ENCODER_GetDelta();
+        motor_pos += delta;
+        motor_position = motor_pos;
 
         /* ================================================================ */
         /* 步骤 3：子状态机调度                                              */
@@ -219,22 +241,29 @@ void StartPendulumTask(void *argument)
             pwm_out = 0.0f;
 
             if (cmd == PENDULUM_CMD_TOGGLE) {
-                /* 切入平衡：清除角度环，准备开始控制 */
+                /* 切入平衡：清 PID + 复位编码器 */
                 PID_Clear(&pid_angle);
+                PID_Clear(&pid_position);
+                ENCODER_Reset();
+                motor_pos = 0;
+                pos_off   = 0.0f;
+                pos_cnt   = 0;
+                motor_position = 0;
+                pos_offset = 0.0f;
                 substate = PENDULUM_BALANCING;
             }
             break;
 
-        /* ---- BALANCING：单环 PID 平衡 ---- */
+        /* ---- BALANCING：双环 PID 平衡 ---- */
         case PENDULUM_BALANCING: {
             /*
-             * 角度环：
-             *   角度目标 = ANGLE_TARGET（竖直向上）
-             *   角度误差 = ANGLE_TARGET - angle_raw
+             * 角度环（内环，5ms）：
+             *   角度目标 = ANGLE_TARGET - 位置环偏移
+             *   角度误差 = 角度目标 - 角度实测
              *   → PID_PositionalSpeed → PWM
              */
-            float angle_target = (float)ANGLE_TARGET;
-            float angle_error  = angle_target - (float)(int32_t)angle_raw;
+            float angle_target = (float)ANGLE_TARGET - pos_off;
+            float angle_error  = angle_target - (float)(int32_t)raw_angle;
             angle_err = (int16_t)angle_error;
 
             /*
@@ -273,6 +302,15 @@ void StartPendulumTask(void *argument)
                 TB6612_Stop(MOTOR_A);
             }
 
+            /* ---------- 位置环（外环，50ms）---------- */
+            pos_cnt++;
+            if (pos_cnt >= POS_DIVIDER) {
+                pos_cnt = 0;
+                PID_SetTarget(&pid_position, 0.0f);
+                pos_off = PID_PositionalPosition(&pid_position, (float)motor_pos);
+                pos_offset = pos_off;
+            }
+
             /* K1：停止 */
             if (cmd == PENDULUM_CMD_TOGGLE) {
                 TB6612_Stop(MOTOR_A);
@@ -282,7 +320,7 @@ void StartPendulumTask(void *argument)
 
             /* ---------- 倾倒检测 ---------- */
             {
-                int32_t raw_err = (int32_t)angle_raw - 2048;
+                int32_t raw_err = (int32_t)raw_angle - 2048;
                 if (raw_err > FALL_LIMIT || raw_err < -FALL_LIMIT) {
                     TB6612_Stop(MOTOR_A);
                     pwm_out = 0.0f;
@@ -314,7 +352,7 @@ void StartPendulumTask(void *argument)
         /* ================================================================ */
         pendulum_state = substate;
         angle_out      = pwm_out;
-        angle_target = ANGLE_TARGET;
+        angle_target = (uint16_t)((float)ANGLE_TARGET - pos_off);
 
         osDelay(5);  // 200Hz
     }
