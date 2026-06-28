@@ -18,7 +18,7 @@
 /** @brief PWM 频率 (Hz) */
 #define TB6612_PWM_FREQ_HZ    20000
 /** @brief 计数器周期 (ARR + 1)，TIM2 ARR = 49 时此值为 50 */
-#define TB6612_PWM_PERIOD     100
+#define TB6612_PWM_PERIOD     50
 
 /** @brief 电机通道选择 */
 typedef enum {
