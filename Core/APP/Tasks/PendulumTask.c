@@ -91,26 +91,26 @@
 /* 安全参数                                                                    */
 /* ========================================================================== */
 
-#define FALL_LIMIT  1500    /**< 倾倒判定：|raw - 2048| > 1500（约 ±73%） */
-#define MAX_PWM         90u     /**< PWM 输出硬上限（放宽以增加控制权） */
+#define FALL_LIMIT 1500    /**< 倾倒判定：|raw - 2048| > 1500（约 ±73%） */
+#define MAX_PWM    90u     /**< PWM 输出硬上限（放宽以增加控制权） */
 
 /* ========================================================================== */
 /* 跨任务共享变量（定义在此，声明在 appType.h）                                  */
 /* ========================================================================== */
 
-volatile uint8_t  pendulum_state  = PENDULUM_IDLE;
-volatile uint8_t  pendulum_cmd       = PENDULUM_CMD_NONE;
+volatile uint8_t  pendulum_state = PENDULUM_IDLE;
+volatile uint8_t  pendulum_cmd = PENDULUM_CMD_NONE;
 volatile uint16_t angle_raw = 0;
 volatile int16_t  angle_err = 0;
-volatile float    angle_out       = 0.0f;
+volatile float    angle_out = 0.0f;
 volatile uint16_t angle_target = ANGLE_TARGET;
-volatile float    angle_kp  = ANGLE_KP;
-volatile float    angle_ki  = ANGLE_KI;
-volatile float    angle_kd  = ANGLE_KD;
-volatile float    pos_offset;       /**< 位置环输出（叠加到角度目标） */
-volatile float    pos_kp = POS_KP;   /**< 位置环 Kp */
-volatile float    pos_ki = POS_KI;   /**< 位置环 Ki */
-volatile float    pos_kd = POS_KD;   /**< 位置环 Kd */
+volatile float angle_kp  = ANGLE_KP;
+volatile float angle_ki  = ANGLE_KI;
+volatile float angle_kd  = ANGLE_KD;
+volatile float pos_offset;       /**< 位置环输出（叠加到角度目标） */
+volatile float pos_kp = POS_KP;   /**< 位置环 Kp */
+volatile float pos_ki = POS_KI;   /**< 位置环 Ki */
+volatile float pos_kd = POS_KD;   /**< 位置环 Kd */
 
 /* ========================================================================== */
 /* 任务入口                                                                     */
