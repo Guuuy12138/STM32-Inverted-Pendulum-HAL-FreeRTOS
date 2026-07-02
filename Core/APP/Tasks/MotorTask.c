@@ -187,6 +187,20 @@ void StartMotorTask(void *argument)
             }
         }
 
+        /*
+         * 倒立摆模式下，电机和编码器由 PendulumTask 独占。
+         *
+         * MotorTask 即使处于 SUB_IDLE，原先仍会读取 ENCODER_GetDelta() 并在
+         * 循环末尾调用 TB6612_Stop()，从而破坏 PendulumTask 的编码器增量和
+         * 200Hz PWM 输出。这里保留消息处理，但跳过全部硬件访问。
+         */
+        if (current_state == STATE_PENDULUM
+            || (current_state == STATE_DEBUG
+                && debug_origin_state == STATE_PENDULUM)) {
+            osDelay(40);
+            continue;
+        }
+
         /* ---- 读编码器 ---- */
         int16_t delta = ENCODER_GetDelta();
         motor_speed    = delta;
