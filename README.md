@@ -1,631 +1,413 @@
-# STM32-Inverted-Pendulum-HAL-FreeRTOS
+# STM32 Inverted Pendulum
 
-> **Current Stage:** Motor Cascade Dual-Loop Position Control (外环 PD + 内环 PI) + Pendulum Cascade Dual-Loop Balancing (外环位置 PD + 内环角度 PID)
+基于 **STM32F103C8T6、STM32 HAL 和 FreeRTOS（CMSIS-RTOS V2）** 的单级倒立摆控制项目。
+
+当前固件已经实现电机定速控制、电机位置串级控制，以及需要手动扶正摆杆后启动的倒立摆平衡保持。项目重点不仅是 PID 算法，也包括嵌入式分层设计、FreeRTOS 多任务调度、菜单状态机、板级驱动和在线调参。
+
+> 当前阶段：电机位置外环 PD + 速度内环 PI；倒立摆位置外环 PD + 角度内环 PID。
 >
-> **Note:** Swing-up (自起摆 / energy-based swing-up) is planned but not yet implemented.
+> 自起摆（Swing-up）尚未实现。当前需要先手动将摆杆扶到竖直附近，再按 K1 启动平衡。
 >
-> **Last Updated:** 2026-06-28
+> 本文以当前源码行为为准。已知限制和代码风险见[已知问题](#已知问题)。
 
----
+## 已实现功能
 
-## 项目简介
+- **电机定速模式（SPEED）**
+  - 25 Hz 位置式 PI 速度控制
+  - K1/K2 调整目标速度，范围为 ±150 counts/40 ms
+  - K3 将目标速度清零
+- **电机定位模式（POSITION）**
+  - 外环位置 PD 输出速度指令，内环速度 PI 输出 PWM
+  - RP4 电位器控制目标位置，范围为 ±400 counts
+  - 外环速度上限可在 DEBUG 中调整，范围为 5～150 counts/40 ms
+- **倒立摆模式（PENDULUM）**
+  - 200 Hz 角度内环 PID
+  - 20 Hz 位置外环 PD
+  - `IDLE → BALANCING → FALLEN` 三状态保护流程
+  - K1 启动或停止平衡
+- **调参模式（DEBUG）**
+  - 电机子菜单、定速和定位模式可长按 K4 约 2 秒进入
+  - RP1～RP4 分别调节 Kp、Ki、Kd 和目标值
+  - USART1 以 CSV 格式输出电机控制数据
+- **OLED 菜单与状态显示**
+- **四按键消抖和 K4 长按识别**
+- **通用 PID 算法库**
+  - 位置式与增量式
+  - 输出限幅、积分限幅、抗积分饱和及可选积分分离
 
-本项目基于 STM32F103C8T6、STM32 HAL 和 FreeRTOS（CMSIS-RTOS V2）开发，旨在学习和实践现代嵌入式软件架构设计以及 PID 控制算法。
+## 尚未实现
 
-项目硬件平台采用 PID 入门套件，目前已完成**电机串级双环位置控制系统**（外环 PD + 内环 PI）以及**倒立摆平衡控制系统**（外环位置 PD + 内环角度 PID 级联）。系统通过层次化状态机实现菜单导航，支持以下工作模式：
+- 能量法自动起摆
+- 从倒立摆界面进入在线调参；相关处理代码已存在，但状态机入口当前未开放
+- 倒立摆专用串口遥测
+- PID 参数持久化
 
-- **定速模式（SPEED）**：固定 PID 参数，通过 K1/K2 按键调节目标速度，K3 急停
-- **定位模式（POSITION）**：串级双环控制（外环位置 PD → 内环速度 PI），电位器 RP4 旋钮实时控制目标位置，速度上限可调
-- **倒立摆模式（PENDULUM）**：双环 PID 平衡保持，3 状态子状态机管理待机/平衡/倾倒保护全流程（自起摆功能待加入）
-- **调参模式（TUNE / DEBUG）**：从任意运行态长按 K4 进入，RP1~RP4 调节 Kp/Ki/Kd/Target，K1/K2 调节速度上限，串口输出数据供上位机绘制波形
-- **测试模式（TEST）**：独立驱动测试沙盒，角度传感器原始值/百分比 OLED 直显
+## 测试模式说明
 
-项目采用模块化设计思想，将底层驱动、控制算法、状态机调度和应用逻辑进行分层管理，以提高代码的可维护性和可扩展性。
+`TestTask` 是有意保留的通用测试沙盒，并非未完成功能。此前用于验证倒立摆角度传感器；相关测试已经完成，因此测试代码已主动删除。目前进入 TEST 只会显示 `No Test Task`，方便以后需要验证新硬件或驱动时临时加入测试逻辑。
 
----
+## 硬件平台
 
-## Quick Start
+| 模块 | 配置 |
+| --- | --- |
+| MCU | STM32F103C8T6，72 MHz，64 KB Flash，20 KB SRAM |
+| 电机驱动 | TB6612FNG |
+| 电机 | 25GA370 编码减速电机 |
+| 编码器 | AB 相增量编码器，TIM3 四倍频，408 counts/rev |
+| 角度传感器 | 电位器型角度传感器，ADC1_IN8 / PB0 |
+| OLED | SSD1306 / SSD1315，128×64，I²C |
+| 调参输入 | RP1～RP4，ADC2 CH2～CH5 |
+| 用户输入 | K1～K4 四个独立按键 |
 
-### 环境要求
+### 主要引脚
 
-- **操作系统**：Windows / Linux / macOS
-- **CMake** ≥ 3.22
-- **Ninja** 构建系统
-- **交叉编译工具链**：`arm-none-eabi-gcc`（推荐 `gcc-arm-none-eabi`）
-- **调试器**：ST-LINK / J-Link（用于烧录）
+| 功能 | 引脚 |
+| --- | --- |
+| LED | PC13，低电平点亮 |
+| K1 / K2 | PB10 / PB11 |
+| K3 / K4 | PA11 / PA12 |
+| TB6612 AIN1 / AIN2 | PB12 / PB13 |
+| TB6612 BIN1 / BIN2 | PB14 / PB15 |
+| PWM A / PWM B | TIM2_CH1 PA0 / TIM2_CH2 PA1 |
+| 编码器 A / B | TIM3_CH1 PA6 / TIM3_CH2 PA7 |
+| OLED SCL / SDA | I²C1 PB8 / PB9，400 kHz |
+| USART1 TX / RX | PA9 / PA10，115200 8N1 |
+| RP1～RP4 | PA2～PA5 |
+| 角度 ADC | PB0 |
 
-### Toolchain
-
-项目在 `cmake/` 目录下提供了两套工具链文件：
-
-| 文件 | 说明 |
-| ---- | ---- |
-| `cmake/gcc-arm-none-eabi.cmake` | GCC ARM Embedded（默认） |
-| `cmake/starm-clang.cmake` | LLVM/Clang 交叉编译（备选） |
-
-> 默认使用 GCC ARM Embedded。确保 `arm-none-eabi-gcc` 在 PATH 中。
-
-### CLion 配置
-
-1. 用 CLion 打开项目根目录（包含 `CMakeLists.txt` 的目录）
-2. CLion 会自动检测 `CMakePresets.json` 中的预设
-3. 在 **Settings → Build, Execution, Deployment → CMake** 中确认预设已加载：
-   - **Debug** — 调试构建（`-O0 -g`）
-   - **Release** — 发布构建（`-Os`）
-
-### 编译
-
-```bash
-# 配置（Debug）
-cmake --preset Debug
-
-# 编译
-cmake --build build/Debug
-
-# 或一步到位（Release）
-cmake --preset Release
-cmake --build build/Release
-```
-
-### 下载
-
-使用 ST-LINK 或 J-Link 烧录生成的 ELF / HEX 文件：
-
-```bash
-# ST-LINK 示例（需安装 STM32CubeProgrammer 或 stlink 工具）
-STM32_Programmer_CLI -c port=SWD -w build/Debug/STM32-Inverted-Pendulum.elf -rst
-
-# OpenOCD 示例
-openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
-        -c "program build/Debug/STM32-Inverted-Pendulum.elf verify reset exit"
-```
-
-### 运行
-
-1. 通过 USB 转串口模块连接 **USART1**（默认 115200 8N1）
-2. 硬件上电，OLED 显示主菜单选择界面
-3. K1 进入电机控制（定速 / 定位），K2 进入倒立摆，K3 进入测试模式
-4. 运行态下短按 K4 返回上级菜单，长按 K4 约 2 秒进入调参模式
-
----
-
-## 开发环境
-
-### 硬件平台
-
-- STM32F103C8T6（72 MHz，64 KB Flash，20 KB SRAM）
-- TB6612FNG 电机驱动模块
-- 25GA370 编码减速电机（102 PPR × 4 倍频 = 408 counts/rev）
-- AB 相增量式编码器
-- OLED 显示屏（SSD1306 / SSD1315，128×64，I²C）
-- 按键输入（K1 / K2 / K3 / K4，共 4 个）
-- 电位器输入（Pot1 ~ Pot4，共 4 路，ADC2 采集）
-
-### 软件平台
-
-- Language：C（C11）
-- IDE：CLion
-- Build System：CMake ≥ 3.22 + Ninja
-- Framework：STM32 HAL
-- RTOS：FreeRTOS
-- RTOS API：CMSIS-RTOS V2
-
----
+TIM2 的计数时钟为 1 MHz，周期为 50 个计数，因此 PWM 频率约为 20 kHz。
 
 ## 软件架构
 
-项目采用四层架构：应用层（APP）、算法层（Algorithm）、板级支持包（BSP）、硬件抽象层（HAL）。
-
 ```text
-APP（应用层）
-├── FsmTask         — 按键扫描 + 状态机调度，50Hz
-├── MotorTask       — 电机速度 / 位置 PID 控制，25Hz
-├── PendulumTask    — 倒立摆控制（平衡保持），200Hz
-├── UITask          — OLED 显示，10Hz
-├── SerialTask      — 串口调试输出，50Hz
-├── TestTask        — 独立驱动测试沙盒，100Hz
-├── fsm.c/h         — 层次状态机（表驱动 + DEBUG 返回栈）
-└── Types/appType.h — 跨任务类型定义与消息结构体
+APP
+├── FsmTask          按键扫描、状态机和调参输入
+├── MotorTask        电机定速与定位控制
+├── PendulumTask     倒立摆平衡控制
+├── UITask           OLED 界面刷新
+├── SerialTask       串口调试输出
+├── TestTask         通用测试沙盒（当前为空）
+├── Fsm              表驱动菜单状态机
+└── Types            跨任务消息和共享类型
 
-Algorithm（算法层）
-└── PID            — 位置式 / 增量式 × 速度 / 位置（4 种组合）
+Algorithm
+└── PID              通用 PID 控制器
 
-BSP（板级支持包）
-├── TB6612         — 电机驱动（PWM + 方向）
-├── Encoder        — 编码器（TIM3 编码器模式）
-├── OLED           — OLED 显示（I²C，帧缓冲）
-├── Key            — 按键（4 键，消抖，单击 / 长按）
-├── Font           — ASCII 字体（16×8 / 8×6）
-├── RP             — 电位器（ADC2，百分比映射）
-└── Angle          — 角度传感器（ADC1_IN8/PB0，电位器型）
+BSP
+├── TB6612           电机方向和 PWM
+├── Encoder          TIM3 正交编码器
+├── Angle            角度 ADC
+├── RP               四路调参电位器
+├── Key              按键消抖与边沿检测
+└── OLED / Font      显示驱动
 
-HAL（硬件抽象层）
-├── TIM            — 定时器（PWM / 编码器）
-├── ADC            — 模数转换
-├── I2C            — I²C 总线
-├── USART          — 串口通信
-└── GPIO           — 通用 IO
+HAL / Middleware
+├── STM32Cube HAL
+└── FreeRTOS + CMSIS-RTOS V2
 ```
 
-### 各层职责
+目录职责：
 
-| 层级 | 目录 | 职责 |
-| ---- | ---- | ---- |
-| **APP** | `Core/APP/Tasks/` | 应用任务（5 个 FreeRTOS 线程），实现业务逻辑 |
-| **APP** | `Core/APP/Types/` | 跨任务共享的类型定义、消息结构体和全局变量声明 |
-| **APP** | `Core/APP/Fsm/` | 层次状态机（FsmTask + fsm.c/h）：状态转移表 + DEBUG 返回栈 |
-| **Algorithm** | `Core/Algorithm/` | PID 控制器（位置式/增量式、速度/位置四种组合） |
-| **BSP** | `Core/BSP/` | 板级驱动：电机驱动、编码器、OLED、按键、电位器、角度传感器 |
-| **HAL** | `Core/Src/` `Core/Inc/` | STM32CubeMX 生成的外设初始化代码 |
-| **Drivers** | `Drivers/` | CMSIS + HAL 库（ST 官方驱动） |
-| **Middlewares** | `Middlewares/` | FreeRTOS 内核和 CMSIS-RTOS V2 封装层 |
+| 目录 | 职责 |
+| --- | --- |
+| `Core/APP/Tasks/` | FreeRTOS 应用任务 |
+| `Core/APP/Fsm/` | 菜单状态机和任务调度 |
+| `Core/APP/Types/` | 跨任务类型、命令和共享变量声明 |
+| `Core/Algorithm/` | PID 算法 |
+| `Core/BSP/` | 板级驱动 |
+| `Core/Src/`、`Core/Inc/` | CubeMX 生成的初始化及系统代码 |
+| `Drivers/` | STM32 HAL 和 CMSIS |
+| `Middlewares/` | FreeRTOS 内核与 CMSIS-RTOS V2 |
+| `docs/` | 控制算法补充文档 |
 
----
+PID 实现细节见 [`docs/control_algorithm.md`](docs/control_algorithm.md)。
 
-## FreeRTOS 任务设计
+## 系统启动流程
 
-系统启动时在 `freertos.c` 的 `MX_FREERTOS_Init()` 中创建 6 个任务和 1 个消息队列。
+`main()` 完成 GPIO、I²C1、TIM2、ADC2、TIM3、USART1 和 ADC1 初始化，然后创建 RTOS 对象并启动调度器：
 
-| Task | Priority | Period | Stack | Function |
-| ---- | -------- | ------ | ----- | -------- |
-| **FsmTask** | `osPriorityHigh` | 20ms (50Hz) | 128×4 B | 扫描 K1~K4 按键 → 状态机调度 → 通过消息队列向 MotorTask 发送命令 / volatile 标志位向 PendulumTask 发送命令；DEBUG 模式下读取 RP1~4 旋钮；不操作任何硬件外设 |
-| **MotorTask** | `osPriorityNormal` | 40ms (25Hz) | 512×4 B | 从消息队列接收命令 → 速度 PI / 串级位置 PD+PI → PWM 电机驱动；维护全局变量（`speed`, `location`, `Kp`, `Ki`, `Kd`, `Target`, `Actual`, `Out`, `ErrorInt`, `PosSpeedLimit`） |
-| **PendulumTask** | `osPriorityNormal` | 5ms (200Hz) | 512×4 B | 倒立摆控制：3 状态子状态机（IDLE → BALANCING → FALLEN）→ 外环位置 PD + 内环角度 PID 级联平衡；维护倒立摆全局变量（`pendulum_*` 系列）；通过 volatile 标志位接收 FsmTask 命令 |
-| **UITask** | `osPriorityLow` | 100ms (10Hz) | 256×4 B | OLED 帧刷新：快照全局变量 → 根据 `current_state` 渲染不同界面（菜单 / 运行 / 调参 / 倒立摆 / 测试） |
-| **SerialTask** | `osPriorityLow` | 20ms (50Hz) | 256×4 B | DEBUG 模式下以 50Hz 发送 CSV `Target,Actual,Out,ErrorInt\r\n`；其他模式空转节省 CPU |
-| **TestTask** | `osPriorityHigh` | 10ms (100Hz) | 256×4 B | 测试沙盒：读取角度传感器（ADC1_IN8/PB0），OLED 直接显示原始值和百分比，用于独立驱动调试 |
+```text
+复位
+  ↓
+HAL 与 72 MHz 系统时钟初始化
+  ↓
+GPIO / I²C / TIM / ADC / USART 初始化
+  ↓
+创建消息队列和 6 个任务
+  ↓
+启动 FreeRTOS 调度器
+```
+
+## FreeRTOS 任务
+
+| 任务 | 优先级 | 代码周期 | 栈大小 | 职责 |
+| --- | --- | --- | --- | --- |
+| FsmTask | High | 20 ms | 512 B | 扫描按键、驱动状态机、读取电位器、发送控制命令 |
+| MotorTask | Normal | 40 ms | 2048 B | 速度 PI、位置 PD + 速度 PI、电机输出 |
+| PendulumTask | Normal | 5 ms | 2048 B | 倒立摆角度内环、位置外环和倾倒保护 |
+| UITask | Low | 100 ms | 1024 B | OLED 界面刷新 |
+| SerialTask | Low | 20 ms | 1024 B | DEBUG 状态下输出电机 CSV 数据 |
+| TestTask | High | 50 ms | 1024 B | 通用测试沙盒；当前没有待测试内容 |
+
+系统 Tick 为 1 kHz，采用抢占式调度，FreeRTOS Heap 为 12 KB。
+
+> 表中的周期来自任务末尾的 `osDelay()`，不是严格的绝对周期；任务执行时间会叠加到实际循环周期中。
 
 ### 任务间通信
 
-采用 **消息队列 + volatile 标志 + 共享内存** 混合模式：
+| 方向 | 方式 | 内容 |
+| --- | --- | --- |
+| FsmTask → MotorTask | `motorCmdQueue` | 模式切换、急停、目标值、PID 参数和速度上限 |
+| FsmTask → PendulumTask | `volatile pendulum_cmd` | 启动/停止切换 |
+| 控制任务 → UI | `volatile` 共享变量 | PID 参数、目标、反馈、输出和子状态 |
 
-| 方向 | 方式 | 说明 |
-| ---- | ---- | ---- |
-| FsmTask → MotorTask | `motorCmdQueue`（8 条 × 16 字节） | 电机命令（加速/定位/急停/调参/更新 PID） |
-| FsmTask → PendulumTask | volatile `pendulum_cmd` 标志位 | 摆控制命令（启动/停止/旋转），PendulumTask 读取后清零 |
-| MotorTask / PendulumTask → UITask / SerialTask | volatile 全局变量 | 零拷贝，UITask 快照保证同一帧内变量一致 |
+`motorCmdQueue` 深度为 8，每个消息 16 字节。共享变量主要用于显示和观测，没有提供完整的一致性快照或互斥保护。
 
-消息队列确保按键事件不丢失，volatile 标志位用于不需要排队的简单命令，全局变量用于高频只读数据（PID 参数、运行状态），避免了锁开销。
+## 菜单状态机
 
-### 状态机设计
-
-系统采用表驱动层次状态机（`fsm.c/h`），7 个状态 × 5 个事件 = 35 条转移规则集中在一张 `const` 表中。DEBUG 模式通过状态栈实现"从任意状态进入 / 退出后返回原状态"。
+状态机采用 `table[state][event]` 的表驱动实现，共 7 个状态、5 种按键事件：
 
 ```text
-MENU_MAIN ──K1──→ MENU_MOTOR ──K1──→ MOTOR_SPEED ──K4L──→ DEBUG
-   │ K2        K3    │ K2              │ K4S ←──┘         │ K4L
-   ▼           ▼     ▼                 ▼         压栈/弹栈  ▼
-PENDULUM    TEST  MOTOR_POSITION     MOTOR_SPEED ←───────── 返回原状态
-   │ K4S            │ K4S
-   └──→ MENU_MAIN ←─┘
+MAIN
+├── K1 → MOTOR MENU
+│   ├── K4 长按 → DEBUG
+│   ├── K1 → SPEED
+│   │   ├── K4 短按 → MOTOR MENU
+│   │   └── K4 长按 → DEBUG
+│   └── K2 → POSITION
+│       ├── K4 短按 → MOTOR MENU
+│       └── K4 长按 → DEBUG
+├── K2 → PENDULUM
+│   └── K4 短按 → MAIN
+└── K3 → TEST
+    └── K4 短按 → MAIN
 ```
 
-#### 倒立摆子状态机（PendulumTask 内部）
-
-倒立摆任务内部维护一个 3 状态子状态机，管理平衡控制的全生命周期：
-
-```text
-  ┌──────┐  K1   ┌───────────┐
-  │ IDLE │──────→│ BALANCING │
-  │(待机) │←──────│ (双环平衡)  │
-  └──────┘  K1    └─────┬─────┘
-      ↑                │
-      │            倾倒检测（|angle - 2048| > 1500）
-      │                │
-      │                ▼
-      └─────────── ┌──────────┐
-             K1    │  FALLEN  │
-                   │ (倾倒保护) │
-                   └──────────┘
-                        │
-                  1.5s 后自动回到 IDLE
-```
-
----
+DEBUG 使用返回栈保存来源状态，再次长按 K4 后返回原来的电机运行模式。虽然代码中保留了倒立摆 DEBUG 的参数处理与界面分支，但当前状态表将 `PENDULUM + K4_LONG` 设置为自保持，因此无法通过按键进入。
 
 ## 控制算法
 
-### 串级双环位置控制（Cascade Dual-Loop）
+### 电机定速
 
-定位模式采用**串级双环**架构：外环位置 PD 输出速度指令 → 内环速度 PI 输出 PWM，控制频率 25Hz（40ms 周期）。
-
-```text
-Target_pos ──→ (+) ──→ [外环 PD] ──→ speed_sp ──→ (+) ──→ [内环 PI] ──→ PWM ──→ Motor
-                 ▲                    Ki=0                      ▲                    │
-                 │                                               │                    │
-                 └──── location ◄──── Encoder ◄── delta ────────┘                    │
-                       (累计位置)          (速度反馈)                            ┌─────▼──────┐
-                                                                             │ 编码器反馈   │
-                                                                             │ 25Hz (40ms) │
-                                                                             └────────────┘
-```
-
-**设计思路**：
-- **外环 PD（Ki=0）**：位置误差 → 速度指令。不需要积分——位置误差无论多小，总输出非零速度指令给内环
-- **内环 PI**：速度误差 → PWM。PI 的积分项自然累加速度误差，PWM 逐渐增大直到克服摩擦力，消除位置静差
-- **速度上限可调**：外环输出被 CLAMP 在 `[-PosSpeedLimit, +PosSpeedLimit]`，控制电机到达目标位置的最大速度。默认为 150（全速），可在 DEBUG 模式下通过 K1/K2 调节
-
-单环位置控制中需要的"积分分离"在串级架构中自然消失——静差由内环 PI 的积分项处理，外环只需 PD。
-
-### 定速模式（单环 PI）
-
-定速模式使用单环 PI 控制（Kd=0），直接由速度误差驱动 PWM。与定位模式共用同一个 `pid_speed` 实例，速度模式下调好的 PI 参数可无缝复用到定位模式的内环。
-
-### PID 算法库
-
-算法层已实现 4 种 PID 控制器（位置式/增量式 × 速度/位置），支持输出限幅、积分限幅、遇限削弱积分和积分分离。当前实际使用的组合：
-
-| 模式 | 外环 | 内环 |
-|------|------|------|
-| 定速 | — | 位置式 PI（单环） |
-| 定位 | 位置式 PD（串级外环） | 位置式 PI（串级内环） |
-
-### 倒立摆级联双环控制
-
-倒立摆平衡采用**外环位置 PD + 内环角度 PID** 的级联架构，控制频率 200Hz（5ms 周期）。
+控制周期为 40 ms，编码器反馈使用单周期原始增量，没有换算为 rpm 或 rad/s：
 
 ```text
-Pos_tgt ──→ (+) ──→ [外环 PD] ──→ angle_offset ──→ (+) ──→ [内环 PID] ──→ PWM ──→ Motor
-               ▲    Ki=0                              ▲                          │
-               │                                      │                          │
-               └── Encoder 位置 ◄──────────────────────┘                          │
-                                                     Angle_sensor ◄──────────────┘
+目标速度 ──→ 速度 PI ──→ PWM ──→ 电机
+                ↑                    │
+                └── 编码器增量 ─────┘
 ```
 
-**设计思路：**
-- **外环位置 PD（Ki=0）**：位置误差 → 角度偏移量。摆杆需要倾斜才能移动——外环输出一个角度偏移叠加到竖直目标角上，电机为纠正角度而移动，从而消除位置误差
-- **内环角度 PID**：角度误差 → PWM。以竖直位置（ADC 中点 ≈ 2048 + 外环偏移）为目标，PID 调节 PWM 维持平衡
+默认参数：
 
-内外环各有独立的 Kp/Ki/Kd 参数，可在 DEBUG 模式下通过 RP1~RP4 实时调节。
+| 参数 | 数值 |
+| --- | ---: |
+| Kp | 0.35 |
+| Ki | 0.45 |
+| Kd | 0.00 |
+| PWM 限幅 | ±100% |
 
-> **待实现**：自起摆（Swing-up）——能量法检测摆杆角度和角速度，控制电机往复运动注入能量，直到摆杆接近竖直后自动切入 BALANCING。当前需手动将摆杆扶至接近竖直后按 K1 启动平衡。
+### 电机定位
 
----
-
-## 使用说明
-
-### 开机
-
-系统上电后显示主菜单选择界面。
-
-**主菜单（SELECT MODE）**：
+定位模式采用串级双环：
 
 ```text
-  SELECT MODE
-K1: Motor
-K2: Pendulum
-K3: Test
+目标位置 → 位置 PD → 目标速度 → 速度 PI → PWM → 电机
+              ↑                         ↑            │
+              └──── 累计位置 ──────────┴─ 编码器 ───┘
 ```
+
+- 外环位置 PD：`Kp=0.45`、`Ki=0`、`Kd=0.2`
+- 内环复用定速模式的速度 PI
+- 外环输出被限制为 ±`pos_speed_limit`
+- RP4 将 0～100% 映射为 -400～+400 counts
+
+### 倒立摆平衡
+
+倒立摆采用不同频率的串级控制：
+
+```text
+目标位置 0 → 位置 PD（50 ms）→ 角度偏移
+                                  ↓
+竖直目标 2058 ADC counts ───────→ 目标角度
+                                  ↓
+角度传感器 → 角度 PID（5 ms）→ PWM → 电机
+```
+
+默认参数：
+
+| 控制环 | Kp | Ki | Kd | 输出限幅 |
+| --- | ---: | ---: | ---: | ---: |
+| 角度内环 | 0.30 | 0.01 | 0.40 | ±100，实际 PWM 再限制为 90% |
+| 位置外环 | 0.35 | 0.00 | 4.50 | ±100 ADC counts |
+
+位置环每执行 10 次角度环更新一次。电机位置在超过 ±408 counts 时被软件归零，用于限制位置反馈范围。
+
+### 倒立摆子状态机
+
+```text
+IDLE ──K1──→ BALANCING
+ ↑               │
+ └────K1─────────┤
+                 │ 倾倒检测
+                 ↓
+               FALLEN
+                 │
+                 └──K1──→ IDLE
+```
+
+当 `|angle_raw - 2048| > 1500` 时进入 `FALLEN` 并关闭电机。当前实现不会在固定时间后自动恢复，需要按 K1 返回 `IDLE`。
+
+## 操作说明
+
+### 主菜单
 
 | 按键 | 功能 |
-| ---- | ---- |
-| K1 | 进入电机子菜单 |
-| K2 | 进入倒立摆 |
-| K3 | 进入测试模式（角度传感器调试） |
+| --- | --- |
+| K1 | 进入电机菜单 |
+| K2 | 进入倒立摆模式 |
+| K3 | 进入通用测试沙盒；当前显示 `No Test Task` |
 
-### 电机子菜单
-
-```text
-  MOTOR  MODE
-K1: Speed
-K2: Position
-K4: Back
-```
+### 电机菜单
 
 | 按键 | 功能 |
-| ---- | ---- |
-| K1 | 进入定速模式 |
-| K2 | 进入定位模式 |
+| --- | --- |
+| K1 | 定速模式 |
+| K2 | 定位模式 |
 | K4 | 返回主菜单 |
+| K4 长按约 2 秒 | 进入 DEBUG；此时电机仍处于停止状态 |
 
-### 定速模式（SPEED）
-
-OLED 布局：
-
-```text
-     SPEED
-Kp:0.35         Tgt:+50
-Ki:0.45         Act: 42
-Kd:0.00         Out:+35
-```
+### 定速模式
 
 | 按键 | 功能 |
-| ---- | ---- |
-| K1 | 单击增加目标速度 (+10 counts/周期) |
-| K2 | 单击减少目标速度 (-10 counts/周期) |
-| K3 | 单击急停（目标归零，清除积分） |
-| K4 短按 | 返回电机子菜单 |
-| K4 长按 2s | 进入调参模式（2000ms 长按检测，LED 5Hz 闪烁计时，触发时快闪 3 次确认） |
+| --- | --- |
+| K1 | 目标速度 +10 |
+| K2 | 目标速度 -10 |
+| K3 | 目标速度清零 |
+| K4 短按 | 返回电机菜单并停止电机 |
+| K4 长按约 2 秒 | 进入 DEBUG |
 
-- Target 范围：±150 counts/周期
-- PID 参数使用固定宏值（调参完成后手动修改重新烧录）
+### 定位模式
 
-### 定位模式（POSITION）
+- RP4 实时设置目标位置。
+- K1、K2、K3 不改变运行状态。
+- K4 短按返回电机菜单并停止电机。
+- K4 长按约 2 秒进入 DEBUG。
 
-OLED 布局（标题行显示速度上限）：
+### 倒立摆模式
 
-```text
-POS SpdLim:150
-Kp:0.45         Tgt:+100
-Ki:0.00         Loc: 102
-Kd:0.20         Out: +35
-```
+1. 手动将摆杆扶到竖直附近。
+2. 按 K1 进入 `BALANCING`。
+3. 再按 K1 停止并回到 `IDLE`。
+4. 倾倒后系统进入 `FALLEN`，按 K1 回到 `IDLE`。
+5. K4 短按返回主菜单。
 
-| 控件 | 功能 |
-| ---- | ---- |
-| 旋钮 RP4 | 实时控制目标位置（±400 counts，指哪打哪） |
-| 标题栏 | `POS SpdLim:150` — 当前速度上限（150 = 全速，越小越慢） |
-| K4 短按 | 返回电机子菜单 |
-| K4 长按 2s | 进入调参模式（2000ms 长按检测，LED 确认闪烁；可调节速度上限） |
+当前长按 K4 不会进入倒立摆调参模式。
 
-> K1 / K2 / K3 在定位模式下屏蔽。Ki = 0.00（外环纯 PD），静差由内环 PI 消除。
+### DEBUG
 
-### 倒立摆模式（PENDULUM）
+从 MOTOR MENU、SPEED 或 POSITION 长按 K4 进入。若从 MOTOR MENU 进入，电机仍处于停止状态；在线控制观测主要用于 SPEED 和 POSITION。
 
-倒立摆模式通过 3 状态子状态机管理平衡控制流程。倒立摆需手动扶至接近竖直位置后按 K1 启动平衡。
+| 输入 | 功能 |
+| --- | --- |
+| RP1 | Kp，范围 0～2 |
+| RP2 | Ki，范围 0～2 |
+| RP3 | Kd，范围 0～2 |
+| RP4 | 目标速度或目标位置 |
+| K1 / K2（SPEED 来源） | 目标值 ±10 |
+| K1 / K2（POSITION 来源） | 位置外环速度上限 ±5 |
+| K4 长按约 2 秒 | 退出 DEBUG，返回来源模式 |
 
-**子状态机：**
+退出 DEBUG 时恢复进入前保存的 Kp、Ki、Kd；当前目标值不会显式恢复到进入前的值。
 
-```text
-  ┌──────┐  K1   ┌───────────┐
-  │ IDLE │──────→│ BALANCING │
-  │(待机) │←──────│ (双环平衡)  │
-  └──────┘  K1    └─────┬─────┘
-      ▲                │
-      │            倾倒检测
-      │                │
-      │                ▼
-      └─────────── ┌──────────┐
-             K1    │  FALLEN  │
-                   │ (倾倒保护) │
-                   └──────────┘
-                        │
-                  1.5s 后自动回到 IDLE
-```
-
-| 子状态 | 说明 |
-| ------ | ---- |
-| **IDLE** | 待机，电机停转，等待 K1 启动 |
-| **BALANCING** | 双环 PID 平衡保持（外环位置 PD + 内环角度 PID），动态调整 PWM 维持竖直 |
-| **FALLEN** | 倾倒保护，电机刹车 1.5 秒后自动回到 IDLE |
-
-> **注意**：自起摆（Swing-up）功能尚未实现，当前需手动将摆杆扶至接近竖直后按 K1 启动。自起摆是下一个计划加入的功能。
-
-**OLED 布局**（使用 `afont8x6` 小字体，双环参数同屏）：
+USART1 在 DEBUG 中以约 50 Hz 输出：
 
 ```text
-PENDULUM Spd:XX
-aKp:0.30 aKi:0.01 aKd:0.40
-pKp:0.35 pKi:0.00 pKd:4.50
-Tar:2048 Act:2047 Out:+03
+Target,Actual,Out,ErrorInt
 ```
 
-- 上行：角度环 PID 参数（`aKp/aKi/aKd`）
-- 中行：位置环 PID 参数（`pKp/pKi/pKd`）
-- 下行：角度目标 / 实际角度 / PWM 输出
+该数据目前始终来自 `MotorTask` 的共享变量。
 
-| 按键 | 功能 |
-| ---- | ---- |
-| K1 | 启动 / 停止摆控制（IDLE ↔ BALANCING / FALLEN → IDLE） |
-| K4 短按 | 返回主菜单 |
-| K4 长按 2s | 进入调参模式（LED 5Hz 闪烁计时） |
+## 构建
 
-> 摆杆倾倒时自动进入 FALLEN 保护状态，刹车 1.5s 后回到 IDLE。从倒立摆进入 DEBUG 模式时，RP1~RP4 调节倒立摆 PID 参数，K1/K2 调节速度上限。
+### 环境要求
 
-### 测试模式（TEST）
+- CMake 3.22 或更高版本
+- Ninja
+- `arm-none-eabi-gcc`
+- ST-LINK 或 J-Link
 
-独立驱动测试沙盒，用于角度传感器调试。
+工程提供 Debug 和 Release 两个 CMake Preset：
 
-- 读取角度传感器原始值（ADC1_IN8/PB0），OLED 直接显示原始值（0~4095）和百分比
-- 不触发任何 PID 控制，不操作电机
-- K4 短按返回主菜单
-
-### 调参模式（TUNE / DEBUG）
-
-从定速或定位模式长按 K4 进入，OLED 标题显示反白 `TUNE SpdLim:XX`。
-
-| 电位器 | 功能 |
-| ------ | ---- |
-| Pot1（RP1） | 调节 Kp（0 ~ 2.0） |
-| Pot2（RP2） | 调节 Ki（0 ~ 2.0） |
-| Pot3（RP3） | 调节 Kd（0 ~ 2.0） |
-| Pot4（RP4） | 调节 Target（范围取决于来源模式：定速 ±150 / 定位 ±400） |
-
-| 按键 | 功能 |
-| ---- | ---- |
-| K1 | 速度上限 +5（最大 150） |
-| K2 | 速度上限 -5（最小 5） |
-| K4 长按 2s | 退出调参，恢复进入前的 PID 参数和目标值 |
-
-> 速度上限在定位模式下控制电机到达目标位置的最大速度。默认 150（全速冲刺），调小后电机以更慢、更平滑的速度到位。速度上限值会保留到下次进入定位模式。
-
-**串口输出**：TUNE 模式下，USART1（默认 115200 8N1）以 50Hz 输出 CSV 数据：
-
-```text
-50,42,35,10    ← Target, Actual, Out, ErrorInt
-50,47,18,25
-...
+```bash
+cmake --preset Debug
+cmake --build --preset Debug
 ```
 
-可直接导入波形软件（VOFA+ / SerialPlot）绘制 Target / Actual / Out / ErrorInt 曲线，直观观察控制效果——Target 变化时 Actual 跟踪，Out 反映 PWM 输出。
+Release：
 
----
-
-## 项目结构
-
-```text
-STM32-Inverted-Pendulum/
-│
-├── Core/                                # 核心代码（用户层）
-│   ├── APP/
-│   │   ├── Fsm/
-│   │   │   ├── FsmTask.c                # 按键扫描 + 状态机调度任务（50Hz，优先级 High）
-│   │   │   ├── fsm.h                    # 状态机 API（表驱动 + DEBUG 返回栈）
-│   │   │   └── fsm.c                    # 状态机实现
-│   │   ├── Tasks/
-│   │   │   ├── MotorTask.c              # 电机控制任务：速度环 + 位置环（25Hz，优先级 Normal）
-│   │   │   ├── PendulumTask.c           # 倒立摆控制任务：平衡保持（200Hz，优先级 Normal）
-│   │   │   ├── UITask.c                 # OLED 显示任务（10Hz，优先级 Low）
-│   │   │   ├── SerialTask.c             # 串口调试输出任务（50Hz，优先级 Low）
-│   │   │   └── TestTask.c               # 独立测试任务（100Hz，优先级 High）
-│   │   └── Types/
-│   │       └── appType.h                # 跨任务共享的类型枚举、消息结构体、extern 声明
-│   │
-│   ├── Algorithm/
-│   │   ├── pid.h                        # PID 控制器 API（4 种算法）
-│   │   └── pid.c                        # PID 控制器实现
-│   │
-│   ├── BSP/                             # 板级支持包（硬件驱动）
-│   │   ├── TB6612.h / TB6612.c          # TB6612FNG 电机驱动（PWM + 方向控制）
-│   │   ├── encoder.h / encoder.c        # 编码器驱动（TIM3 编码器模式）
-│   │   ├── oled.h / oled.c              # OLED 显示驱动（I²C，帧缓冲）
-│   │   ├── font.h / font.c              # ASCII 字体数据（16×8）
-│   │   ├── key.h / key.c                # 按键驱动（4 键，消抖，单击/长按）
-│   │   ├── rp.h / rp.c                  # 电位器驱动（ADC2 4 通道，百分比映射）
-│   │   └── angle.h / angle.c            # 角度传感器驱动（ADC1_IN8/PB0，电位器型）
-│   │
-│   ├── Src/                             # CubeMX 生成的外设初始化
-│   │   ├── main.c                       # 主函数和系统时钟配置
-│   │   ├── freertos.c                   # FreeRTOS 任务创建
-│   │   ├── gpio.c / adc.c / i2c.c       # 外设初始化（GPIO / ADC / I²C）
-│   │   ├── tim.c / usart.c              # 定时器 / 串口配置
-│   │   ├── stm32f1xx_it.c               # 中断服务函数
-│   │   ├── stm32f1xx_hal_msp.c          # HAL MSP 初始化
-│   │   ├── stm32f1xx_hal_timebase_tim.c # HAL 时基（TIM）
-│   │   ├── system_stm32f1xx.c           # 系统初始化
-│   │   ├── syscalls.c                   # 系统调用桩
-│   │   └── sysmem.c                     # 内存管理桩
-│   │
-│   └── Inc/                             # 对应的头文件
-│       ├── main.h / gpio.h / adc.h
-│       ├── i2c.h / tim.h / usart.h
-│       ├── stm32f1xx_hal_conf.h
-│       ├── stm32f1xx_it.h
-│       └── FreeRTOSConfig.h             # FreeRTOS 配置（调度、堆、钩子等）
-│
-├── Drivers/                             # ST 官方驱动
-│   ├── CMSIS/                           # ARM CMSIS Core + Device
-│   └── STM32F1xx_HAL_Driver/            # STM32F1 HAL 库
-│
-├── Middlewares/                         # 中间件
-│   └── Third_Party/FreeRTOS/            # FreeRTOS 内核 + CMSIS-RTOS V2 封装
-│
-├── cmake/                               # CMake 子模块
-│   ├── gcc-arm-none-eabi.cmake          # GCC ARM 工具链文件
-│   ├── starm-clang.cmake                # Clang 工具链文件（备选）
-│   └── stm32cubemx/                     # CubeMX 生成的 CMake 片段
-│
-├── docs/                                # 项目文档
-│   └── control_algorithm.md             # PID 算法详细参考
-│
-├── build/                               # 构建输出目录（gitignore）
-├── CMakeLists.txt                       # 顶层 CMake 配置
-├── CMakePresets.json                    # CMake 预设（Debug / Release）
-├── STM32F103XX_FLASH.ld                 # 链接脚本
-├── startup_stm32f103xb.s                # 启动汇编
-└── STM32-Inverted-Pendulum.ioc          # CubeMX 工程文件
+```bash
+cmake --preset Release
+cmake --build --preset Release
 ```
 
----
+默认工具链文件为 `cmake/gcc-arm-none-eabi.cmake`。生成目标为 `STM32-Inverted-Pendulum.elf`，链接脚本为 `STM32F103XX_FLASH.ld`。
 
-## English Summary
+烧录示例：
 
-### Introduction
-
-This project is built on the **STM32F103C8T6** (72 MHz, 64 KB Flash, 20 KB SRAM) using **STM32 HAL** and **FreeRTOS** (CMSIS-RTOS V2). It serves as a hands-on platform for practicing modern embedded software architecture and closed-loop control algorithms.
-
-The hardware is a PID starter kit. Both **motor cascade dual-loop position control** (outer PD + inner PI) and **inverted pendulum balancing** (outer position PD + inner angle PID at 200 Hz) are fully implemented with a hierarchical menu system.
-
-**Current stage:** Motor cascade dual-loop position control + Inverted pendulum cascade dual-loop balancing.
-**Planned:** Swing-up (energy-based self-erection) for the pendulum.
-
-Five operating modes are exposed through the menu:
-
-- **SPEED Mode** — Fixed-PID speed control. K1/K2 step the target speed (±10 counts/period, clamped to ±150), K3 is an emergency stop. Uses `PID_PositionalSpeed()` in single-loop PI.
-- **POSITION Mode** — Cascade dual-loop position control: outer PD (position → speed setpoint) + inner PI (speed → PWM). RP4 potentiometer drives target position (±400 counts, "point and shoot"). Speed limit shown in title bar, adjustable via DEBUG mode. K1/K2/K3 masked. Uses `PID_PositionalPosition()` (outer, Ki=0) + `PID_PositionalSpeed()` (inner).
-- **PENDULUM Mode** — 3-state sub-FSM (IDLE → BALANCING → FALLEN). Cascade dual-loop balancing (outer position PD + inner angle PID at 200 Hz). Pendulum must be manually positioned near vertical before pressing K1 to start. K4 short returns to main menu, K4 long enters DEBUG. Uses `PID_PositionalPosition()` (outer) + `PID_PositionalSpeed()` (inner). **Note:** Swing-up (self-erection) is planned but not yet implemented.
-- **TUNE / DEBUG Mode** — Reached by long-pressing K4 (2000 ms, LED 5Hz blink timing with 3 rapid flashes on confirm) from any running state. RP1–RP4 live-tune Kp / Ki / Kd / Target while the motor/pendulum keeps running. K1/K2 adjust speed limit (±5 steps, 5–150). USART1 streams CSV telemetry at 50 Hz for waveform tools (VOFA+ / SerialPlot). Exiting restores the parameters and target captured on entry. Origin state is tracked so the UI renders the correct parameter screen.
-- **TEST Mode** — Standalone driver test sandbox for the angle sensor (ADC1_IN8/PB0). Raw ADC value and percentage displayed directly on OLED. No PID control, no motor operation. K4 short returns to main menu.
-
-### Architecture
-
-A four-layer design keeps decision, math, drivers, and HAL cleanly separated. Each layer only calls downward:
-
-```text
-APP                  — FsmTask / MotorTask / PendulumTask / UITask / SerialTask
-                       FSM (table-driven hierarchical state machine + DEBUG return stack)
-Algorithm            — PID (positional / incremental × speed / position, with anti-windup & integral separation)
-BSP                  — TB6612 / Encoder / OLED / Key / RP / Font
-HAL                  — TIM / ADC / I2C / USART / GPIO (CubeMX-generated)
+```bash
+STM32_Programmer_CLI -c port=SWD \
+  -w build/Debug/STM32-Inverted-Pendulum.elf \
+  -rst
 ```
 
-Key rule enforced in comments: **decision tasks do not touch hardware, and the control task does not scan inputs** — `FsmTask` only reads buttons/pots and dispatches commands; `MotorTask` only receives commands and drives the motor.
+## 已知问题
 
-### State Machine
+### 1. MotorTask 与 PendulumTask 竞争同一硬件资源
 
-`fsm.c` encodes all transitions in a single `const` table stored in flash (`STATE_COUNT × EVT_COUNT`), with a dedicated return stack for the DEBUG mode so it can be entered from *any* running state and return to exactly that state on exit. Seven states × five events = 35 rules in one place, no nested `switch` ladders.
+两个任务都会初始化和访问 TB6612、TIM3 编码器及其驱动内部状态。`MotorTask` 即使处于 `SUB_IDLE`，仍会每 40 ms：
 
-```text
-MENU_MAIN ──K1──→ MENU_MOTOR ──K1──→ MOTOR_SPEED ──K4L──→ DEBUG
-   │ K2        K3    │ K2              │ K4S ←──┘         │ K4L
-   ▼           ▼     ▼                 ▼         push/pop ▼
-PENDULUM    TEST  MOTOR_POSITION     MOTOR_SPEED ←────── return to caller state
-   │ K4S            │ K4S
-   └──→ MENU_MAIN ←─┘
-```
+- 调用 `ENCODER_GetDelta()`
+- 执行 `TB6612_Stop(MOTOR_A)`
 
-The pendulum task uses an internal 3-state sub-FSM (IDLE → BALANCING → FALLEN) to manage the balancing lifecycle. Fall detection (|angle - 2048| > 1500) triggers FALLEN, which brakes for 1.5s then returns to IDLE.
+当 `PendulumTask` 以 5 ms 周期运行时，这可能造成：
 
-### Task Design
+- 电机 PWM 被 MotorTask 周期性清零
+- 编码器增量的 `delta_last` 被两个任务交替更新
+- 倒立摆位置反馈不连续
 
-| Task | Priority | Period | Function |
-| ---- | -------- | ------ | -------- |
-| FsmTask | `osPriorityHigh` | 20ms (50Hz) | Scan K1–K4 (debounced click + K4 long-press timing) → FSM dispatch → send `MotorCmd` via queue / `pendulum_cmd` via volatile flag; read RP1–RP4 in POSITION/DEBUG modes |
-| MotorTask | `osPriorityNormal` | 40ms (25Hz) | Drain `MotorCmd` queue → run speed/position PID → map output to PWM via TB6612; maintain the shared display globals |
-| PendulumTask | `osPriorityNormal` | 5ms (200Hz) | 3-state sub-FSM: cascade dual-loop balancing (outer position PD + inner angle PID); maintain `pendulum_*` globals; receive commands via volatile flags |
-| UITask | `osPriorityLow` | 100ms (10Hz) | Snapshot shared globals → render menu / running / tuning / pendulum / test screens on OLED (framebuffer, I²C) |
-| SerialTask | `osPriorityLow` | 20ms (50Hz) | In DEBUG mode only, emit 50Hz CSV `Target,Actual,Out,ErrorInt\r\n`; idle otherwise to save CPU |
-| TestTask | `osPriorityHigh` | 10ms (100Hz) | Test sandbox: read angle sensor (ADC1_IN8/PB0), display raw value and percentage on OLED |
+后续应让电机和编码器只有一个任务拥有，或在模式切换时挂起非活动控制任务，并重新设计编码器采样数据的分发方式。
 
-**Inter-task communication** mixes three patterns by data shape:
+### 2. 倒立摆 DEBUG 入口不可达
 
-- **Message queue** (`motorCmdQueue`, 8 × 16 B) for FsmTask → MotorTask *commands* — guarantees no button event is lost, decouples producer (50 Hz) from consumer (25 Hz).
-- **Volatile flags** (`pendulum_cmd`) for FsmTask → PendulumTask *commands* — FsmTask writes the command code, PendulumTask reads and clears it each cycle (200 Hz). Used for toggle/rotate commands that don't need queuing.
-- **`volatile` globals** (`speed`, `location`, `Kp/Ki/Kd`, `Target`, `Actual`, `Out`, `ErrorInt`, `pendulum_*`) for MotorTask/PendulumTask → UITask/SerialTask *display data* — single writer, zero-copy, no lock overhead.
+`FsmTask`、`PendulumTask` 和 `UITask` 中存在倒立摆调参逻辑，但状态表禁止从 PENDULUM 进入 DEBUG。修改状态机入口前，不应将该功能视为已经可用。
 
-### Control Algorithm
+### 3. 倾倒保护不会自动恢复
 
-**Position mode** uses cascade dual-loop control at 25 Hz: the outer loop is PD-only (Ki=0) — position error produces a speed setpoint clamped to `[-PosSpeedLimit, +PosSpeedLimit]`. The inner loop is PI — speed error drives PWM via `PID_PositionalSpeed()`. This architecture naturally eliminates steady-state error: even a tiny position error produces a non-zero speed command, and the inner PI's integrator accumulates until the motor overcomes friction. No integral separation is needed on the outer loop.
+当前 `FALLEN` 状态必须收到 K1 切换命令才会回到 `IDLE`，没有 1.5 秒自动恢复逻辑。
 
-**Speed mode** uses single-loop PI control (Kd=0), sharing the same `pid_speed` instance with the position mode's inner loop — parameters tuned in speed mode carry over seamlessly.
+### 4. 调度周期不是硬实时定时
 
-The PID library implements 4 variants (positional/incremental × speed/position) with output clamping, integral clamping, conditional integration anti-windup, and integral separation.
+控制任务使用循环末尾的 `osDelay()`。实际周期等于任务执行时间加延时，对 200 Hz 角度环尤其需要关注。后续可改用 `osDelayUntil()` 或硬件定时器触发。
 
-**Pendulum mode** uses cascade dual-loop control at 200 Hz: the outer loop is position PD (Ki=0) — position error produces an angle offset added to the vertical target (~2048). The inner loop is angle PID — angle error drives PWM to maintain balance. The pendulum must be manually positioned near vertical before pressing K1 to start balancing. Swing-up (energy-based self-erection) is planned but not yet implemented.
+### 5. 共享数据缺少同步
 
-### Quick Start
+UI、串口和控制任务通过多个 `volatile` 变量交换数据。`volatile` 只能约束编译器访问，不能保证一组变量属于同一控制周期，也不能解决多写者竞争。
 
-- **Toolchain:** `arm-none-eabi-gcc` on PATH (or Clang via `cmake/starm-clang.cmake`)
-- **Build:**
-  ```bash
-  cmake --preset Debug && cmake --build build/Debug
-  # release:
-  cmake --preset Release && cmake --build build/Release
-  ```
-- **Flash:** ST-LINK / J-Link via STM32CubeProgrammer or OpenOCD
-  ```bash
-  STM32_Programmer_CLI -c port=SWD -w build/Debug/STM32-Inverted-Pendulum.elf -rst
-  ```
-- **Serial:** USART1, 115200 8N1 (CSV telemetry in DEBUG mode)
+### 6. 参数仍需实机验证
 
-### Usage
+当前 PID、角度目标、倾倒阈值和方向符号依赖具体机械结构与传感器安装方向。更换电机、编码器或摆杆后需要重新标定。
 
-- **Main Menu:** K1 → Motor, K2 → Pendulum, K3 → Test
-- **Motor Menu:** K1 → Speed, K2 → Position, K4 → Back
-- **SPEED Mode:** K1/K2 adjust target (±10, clamp ±150), K3 emergency stop, K4 short → back, K4 long → DEBUG
-- **POSITION Mode:** RP4 knob sets target position (±400), title bar shows speed limit (`POS SpdLim:XX`), K1/K2/K3 masked, K4 short → back, K4 long → DEBUG
-- **PENDULUM Mode:** 3-state sub-FSM (IDLE→BALANCING→FALLEN); K1 toggles start/stop, pendulum must be manually positioned near vertical first; K4 short → main menu, K4 long → DEBUG; OLED shows dual-ring PID params (angle + position) in afont8x6
-- **TEST Mode:** Angle sensor debug sandbox; raw ADC and percentage on OLED; K4 short → main menu
-- **DEBUG Mode:** RP1–RP4 adjust Kp/Ki/Kd/Target live; K1/K2 adjust speed limit (±5, 5–150); K4 long → exit and restore previous parameters & target; origin state tracked for correct UI rendering
-- **Serial output:** 50Hz CSV (`Target,Actual,Out,ErrorInt`) for VOFA+ / SerialPlot — observe cascade control: Target position changes, Actual tracks, Out reflects inner speed loop effort
-- Detailed algorithm reference: [`docs/control_algorithm.md`](docs/control_algorithm.md)
+## 后续路线
+
+建议按以下顺序推进：
+
+1. 消除 MotorTask 与 PendulumTask 的电机、编码器资源竞争。
+2. 使用稳定的周期调度方式，并测量角度环实际执行周期。
+3. 打通倒立摆 DEBUG 状态入口和专用串口遥测。
+4. 校准角度零点、方向、倾倒阈值和 PID 参数。
+5. 加入能量法 Swing-up，并在接近竖直时平滑切换到 BALANCING。
+6. 增加参数持久化、看门狗和更完整的故障保护。
+
+## 许可与第三方组件
+
+STM32 HAL、CMSIS 和 FreeRTOS 使用各自目录中附带的许可证。项目自有代码如需发布，建议补充仓库级许可证文件。
