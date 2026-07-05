@@ -21,7 +21,7 @@
 /* ---- 位置环 PID（位置 → 角度偏移）---- */
 
 #define POS_KP          0.35f
-#define POS_KI          0.03f   /* 微小积分，缓慢消除稳态位置误差 */
+#define POS_KI          0.01f   /* 微小积分，缓慢消除稳态位置误差 */
 #define POS_KD          4.50f
 #define POS_OUT_MAX     100.0f
 #define POS_DIVIDER     10      /* 5ms × 10 = 50ms 位置环周期 */
