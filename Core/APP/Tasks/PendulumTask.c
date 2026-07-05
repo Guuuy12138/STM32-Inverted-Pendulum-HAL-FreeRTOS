@@ -21,7 +21,7 @@
 /* ---- 位置环 PID（位置 → 角度偏移）---- */
 
 #define POS_KP          0.35f
-#define POS_KI          0.00f
+#define POS_KI          0.03f   /* 微小积分，缓慢消除稳态位置误差 */
 #define POS_KD          4.50f
 #define POS_OUT_MAX     100.0f
 #define POS_DIVIDER     10      /* 5ms × 10 = 50ms 位置环周期 */
@@ -138,6 +138,10 @@ void StartPendulumTask(void *argument)
     PID_TypeDef pid_position;
     PID_Init(&pid_position, POS_KP, POS_KI, POS_KD, POS_OUT_MAX, -POS_OUT_MAX);
 
+    /* 启用积分分离：位置偏差超过 ±120 counts 时冻结积分 */
+    pid_position.SeparationEnabled   = 1;
+    pid_position.SeparationThreshold = 70.0f;
+
     uint8_t          substate = PENDULUM_IDLE;
     uint8_t          phase = SWING_PHASE_IDLE;
     float            pwm_out = 0.0f;
@@ -196,7 +200,10 @@ void StartPendulumTask(void *argument)
         int16_t delta = ENCODER_GetDelta();
         motor_pos += delta;
         /* 每转一圈重置位置参考，避免多圈累计误差造成持续的大力回拉 */
-        if (motor_pos > 408 || motor_pos < -408) motor_pos = 0;
+        if (motor_pos > 408 || motor_pos < -408) {
+            motor_pos = 0;
+            PID_Clear(&pid_position);   /* 回零同步清积分，避免历史积分冲击 */
+        }
         motor_position = motor_pos;
 
         /* ---- 按键命令：IDLE/FALLEN 启动自动启摆，运行中立即停止 ---- */
@@ -428,6 +435,11 @@ void StartPendulumTask(void *argument)
             if (pid_angle.Ki != angle_ki) pid_angle.Ki = angle_ki;
             if (pid_angle.Kd != angle_kd) pid_angle.Kd = angle_kd;
 
+            /* 同步位置环 PID 参数（DEBUG 旋钮调参用） */
+            if (pid_position.Kp != pos_kp) pid_position.Kp = pos_kp;
+            if (pid_position.Ki != pos_ki) pid_position.Ki = pos_ki;
+            if (pid_position.Kd != pos_kd) pid_position.Kd = pos_kd;
+
             /* PID 内部算 target - actual = 0 - (-error) = error */
             PID_SetTarget(&pid_angle, 0.0f);
             float angle_pwm = PID_PositionalSpeed(&pid_angle, -angle_error);
@@ -461,6 +473,11 @@ void StartPendulumTask(void *argument)
             if (raw_err > FALL_LIMIT || raw_err < -FALL_LIMIT) {
                 TB6612_Stop(MOTOR_A);
                 pwm_out = 0.0f;
+                PID_Clear(&pid_angle);      /* 倾倒后清 PID，避免下次启摆带残值 */
+                PID_Clear(&pid_position);
+                pos_off = 0.0f;
+                pos_cnt = 0;
+                pos_offset = 0.0f;
                 phase = SWING_PHASE_IDLE;
                 substate = PENDULUM_FALLEN;
             }

@@ -18,6 +18,7 @@
 #define ANGLE_KP_MAX  1.0f
 #define ANGLE_KI_MAX  1.0f
 #define ANGLE_KD_MAX  9.0f
+#define POS_KI_MAX    0.05f         /* 位置环 Ki 旋钮量程 */
 
 #define TARGET_MAX    150.0f
 #define SPEED_STEP       10.0f
@@ -158,8 +159,8 @@ void StartFsmTask(void *argument)
         if (cur == STATE_DEBUG) {
 
             if (debug_origin_state == STATE_PENDULUM) {
-                /* 从倒立摆进 DEBUG → 调角度环 PID */
-                RP_ReadAll(&rp_data, 3);
+                /* 从倒立摆进 DEBUG → 调角度环 PID + 位置环 Ki */
+                RP_ReadAll(&rp_data, RP_CHANNELS);
 
                 float kp = rp_data.percent[0] * ANGLE_KP_MAX / 100.0f;
                 float ki = rp_data.percent[1] * ANGLE_KI_MAX / 100.0f;
@@ -168,6 +169,9 @@ void StartFsmTask(void *argument)
                 angle_kp = kp;
                 angle_ki = ki;
                 angle_kd = kd;
+
+                /* 第四旋钮调位置环 Ki（0 ~ 0.05），需要位置环 PID 同步才能生效 */
+                pos_ki = rp_data.percent[3] * POS_KI_MAX / 100.0f;
 
                 if (k1_click) pendulum_cmd = PENDULUM_CMD_TOGGLE;
 
