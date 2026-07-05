@@ -24,9 +24,11 @@ typedef enum {
 
 typedef enum {
     PENDULUM_IDLE       = 0,  /* 待机，等 K1 启动 */
-    PENDULUM_BALANCING  = 1,  /* 双环平衡保持 */
-    PENDULUM_FALLEN     = 2,  /* 倾倒保护，刹停 */
+    PENDULUM_SWING_UP   = 1,  /* 自动启摆 */
+    PENDULUM_BALANCING  = 2,  /* 双环平衡保持 */
+    PENDULUM_FALLEN     = 3,  /* 启摆超时/倾倒保护，停机 */
 } PendulumSubState;
+
 
 /* ---- 状态机事件 ---- */
 
@@ -82,8 +84,9 @@ extern volatile float    pos_speed_limit;  /**< 位置模式速度上限 */
 
 #define ANGLE_TARGET  2058   /* 倒立摆角度目标（ADC 中点 + 微调） */
 
-extern volatile uint8_t  pendulum_state;   /**< 当前子状态（IDLE/BALANCING/FALLEN） */
+extern volatile uint8_t  pendulum_state;   /**< 当前子状态（IDLE/SWING_UP/BALANCING/FALLEN） */
 extern volatile uint8_t  pendulum_cmd;     /**< FsmTask 写入的命令（PENDULUM_CMD_xxx） */
+
 extern volatile uint16_t angle_raw;        /**< 角度传感器原始 ADC 值 */
 extern volatile int16_t  angle_err;        /**< 角度误差 */
 extern volatile float    angle_out;        /**< 角度环 PWM 输出 */
