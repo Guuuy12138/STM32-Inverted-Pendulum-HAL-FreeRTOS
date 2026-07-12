@@ -1,6 +1,7 @@
 /**
  * @file    pid.h
  * @brief   PID 控制器 — 位置式/增量式 × 速度环/位置环，抗积分饱和 + 积分分离
+ * @note    采样周期、被控量单位和输出单位由调用方约定；本模块只维护 PID 的计算历史。
  */
 
 #ifndef STM32_INVERTED_PENDULUM_PID_H

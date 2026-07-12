@@ -1,6 +1,7 @@
 /**
  * @file    UITask.c
  * @brief   OLED 显示任务 — 10Hz，按系统状态渲染不同界面
+ * @note    显示任务只读取共享快照，不写控制状态；TEST 状态会主动让出 OLED 给 TestTask。
  */
 
 #include "cmsis_os.h"

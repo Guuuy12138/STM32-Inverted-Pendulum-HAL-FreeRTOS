@@ -1,6 +1,7 @@
 /**
  * @file    rp.h
  * @brief   电位器（Rotary Potentiometer）ADC 驱动头文件 — 4 路独立旋钮，raw + percent 双格式输出
+ * @note    读取接口按通道顺序阻塞采样，适合低频调参；不要放入需要严格周期的快速控制环。
  * @author  G
  * @date    2026/6/15
  *

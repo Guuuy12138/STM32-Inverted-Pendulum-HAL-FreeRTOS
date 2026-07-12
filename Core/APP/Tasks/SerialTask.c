@@ -1,6 +1,7 @@
 /**
  * @file    SerialTask.c
  * @brief   串口调试输出 — 50Hz，DEBUG 模式下 CSV 格式输出 PID 数据到 USART1
+ * @note    仅在调参状态发送数据；采用阻塞发送以保持实现直观，发送字段顺序需与上位机曲线配置一致。
  */
 
 #include "cmsis_os.h"

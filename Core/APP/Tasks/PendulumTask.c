@@ -1,6 +1,7 @@
 /**
  * @file    PendulumTask.c
  * @brief   倒立摆控制任务 — 200Hz，串级双环：外环位置 PD (50ms) → 内环角度 PID (5ms)
+ * @note    任务以 5 ms 周期执行，启摆、平衡和失稳停机都在同一任务内完成，避免多任务争用电机输出。
  */
 
 #include "cmsis_os.h"
@@ -51,7 +52,6 @@ typedef enum {
 
 /* ---- 安全参数 ---- */
 
-#define FALL_LIMIT 1500         /* |raw - ANGLE_TARGET| > 1500 → 倾倒 */
 #define MAX_PWM    90u
 
 /* ---- 跨任务共享变量（定义在此，extern 声明在 appType.h）---- */
@@ -76,7 +76,11 @@ static bool TickReached(uint32_t now, uint32_t deadline)
     return (int32_t)(now - deadline) >= 0;
 }
 
-/** @brief 判断角度是否位于竖直中心捕获区。 */
+/**
+ * @brief 判断角度是否仍在教程定义的直立中心区。
+ * @note  此区间同时用于启摆后的平衡捕获和运行中的失稳保护；边界值本身视为越界，
+ *        这样可在摆杆离开可控范围的第一个任务周期撤销电机驱动。
+ */
 static bool AngleInCenter(uint16_t angle)
 {
     int32_t center_lo = (int32_t)ANGLE_TARGET - SWING_CENTER_RANGE;
@@ -425,6 +429,25 @@ void StartPendulumTask(void *argument)
         }
 
         case PENDULUM_BALANCING: {
+            /*
+             * 失稳保护：教程把中心区同时作为 PID 允许区。
+             * 一旦越出 ANGLE_TARGET +/- SWING_CENTER_RANGE，先撤销 H 桥输出，
+             * 再清 PID 历史并锁定为 FALLEN；本周期不会继续计算或输出控制量。
+             */
+            angle_err = (int16_t)((int32_t)ANGLE_TARGET - (int32_t)raw_angle);
+            if (!AngleInCenter(raw_angle)) {
+                TB6612_Stop(MOTOR_A);
+                pwm_out = 0.0f;
+                PID_Clear(&pid_angle);
+                PID_Clear(&pid_position);
+                pos_off = 0.0f;
+                pos_cnt = 0;
+                pos_offset = 0.0f;
+                phase = SWING_PHASE_IDLE;
+                substate = PENDULUM_FALLEN;
+                break;
+            }
+
             /* 角度环（内环，5ms）：目标 = ANGLE_TARGET - 位置环偏移 */
             float balance_target = (float)ANGLE_TARGET - pos_off;
             float angle_error = balance_target - (float)(int32_t)raw_angle;
@@ -466,20 +489,6 @@ void StartPendulumTask(void *argument)
                 PID_SetTarget(&pid_position, 0.0f);
                 pos_off = PID_PositionalPosition(&pid_position, (float)motor_pos);
                 pos_offset = pos_off;
-            }
-
-            /* 倾倒检测 */
-            int32_t raw_err = (int32_t)raw_angle - (int32_t)ANGLE_TARGET;
-            if (raw_err > FALL_LIMIT || raw_err < -FALL_LIMIT) {
-                TB6612_Stop(MOTOR_A);
-                pwm_out = 0.0f;
-                PID_Clear(&pid_angle);      /* 倾倒后清 PID，避免下次启摆带残值 */
-                PID_Clear(&pid_position);
-                pos_off = 0.0f;
-                pos_cnt = 0;
-                pos_offset = 0.0f;
-                phase = SWING_PHASE_IDLE;
-                substate = PENDULUM_FALLEN;
             }
             break;
         }

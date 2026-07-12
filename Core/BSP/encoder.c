@@ -1,7 +1,9 @@
 /**
  * @file    encoder.c
  * @brief   正交编码器驱动（TIM3 编码器模式，TI12 四倍频，408 counts/rev）
+ * @note    利用 uint16_t 自然回绕计算短周期增量；控制循环周期不能长到单周期跨越半个计数范围。
  * @note    PA6=CH1(A相), PA7=CH2(B相)。16 位计数器自动回绕，转 int16_t 处理符号。
+ * @note    ENCODER_GetDelta 会更新内部基准，控制模式切换时应先复位或执行一次同步读取。
  */
 
 #include "encoder.h"

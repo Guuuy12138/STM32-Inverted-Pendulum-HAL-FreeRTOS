@@ -1,7 +1,9 @@
 /**
  * @file    TB6612.c
  * @brief   TB6612FNG 双路直流电机驱动
+ * @note    本层只负责 H 桥引脚与 PWM 映射，不决定控制方向的物理正负含义。
  * @note    TIM2: 72MHz, PSC=71→1MHz, ARR=49→20kHz PWM
+ * @note    方向正负由上层控制约定；本驱动只把状态转换为芯片引脚和定时器比较值。
  *
  * 引脚映射：
  *   AIN1=PB13, AIN2=PB12, PWMA=PA0(TIM2_CH1)

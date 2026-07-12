@@ -1,7 +1,9 @@
 /**
  * @file    rp.c
  * @brief   四路电位器驱动（ADC2, CH2~CH5），关闭扫描模式逐通道软件转换
+ * @note    ADC2 未使用 DMA，因此主动关闭扫描模式并逐通道配置，保证 raw[i] 与物理旋钮一一对应。
  * @note    ADC2 无 DMA，扫描模式 EOC 只在序列末尾置位，故关扫描逐路读。
+ * @note    单次调用会依次完成 n 次 ADC 转换，运行时间随通道数增加。
  */
 
 #include "rp.h"

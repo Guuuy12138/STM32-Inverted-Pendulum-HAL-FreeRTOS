@@ -1,6 +1,7 @@
 /**
  * @file    TB6612.h
  * @brief   TB6612FNG 双路直流电机驱动芯片头文件 — 状态 / 速度 / PWM 控制 API
+ * @note    STOP 为高阻滑行，BRAKE 为短接制动；两者的机械响应不同，调用处必须按安全目标选择。
  * @author  G
  * @date    2026/6/15
  *

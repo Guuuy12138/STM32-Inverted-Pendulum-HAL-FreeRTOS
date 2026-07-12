@@ -1,6 +1,7 @@
 /**
  * @file    FsmTask.c
  * @brief   状态机运行时驱动 — 按键扫描 → 事件注入 → 命令分发至 MotorTask
+ * @note    20 ms 周期内完成按键消抖结果消费、状态转移和业务命令分发，是 UI 与控制任务之间的调度入口。
  */
 
 #include "cmsis_os.h"

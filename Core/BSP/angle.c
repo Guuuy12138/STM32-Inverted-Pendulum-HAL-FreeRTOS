@@ -1,6 +1,7 @@
 /**
  * @file    angle.c
  * @brief   角度传感器驱动（电位器型，ADC1_IN8 / PB0，单通道单次转换）
+ * @note    每次读取都执行一次单通道转换并停止 ADC，接口简单但会阻塞至转换完成或超时。
  */
 
 #include "angle.h"

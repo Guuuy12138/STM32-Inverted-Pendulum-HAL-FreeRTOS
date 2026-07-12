@@ -1,6 +1,7 @@
 /**
  * @file    fsm.c
  * @brief   表驱动状态机 — table[state][evt] 决定所有转移，O(1) 查表
+ * @note    查表逻辑保持纯粹，避免在状态判断中夹杂电机或显示副作用，便于检查完整转移关系。
  */
 
 #include "fsm.h"

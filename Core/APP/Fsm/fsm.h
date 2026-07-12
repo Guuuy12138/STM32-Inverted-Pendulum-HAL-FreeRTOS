@@ -1,6 +1,7 @@
 /**
  * @file    fsm.h
  * @brief   表驱动状态机 — table[state][evt] 查表转移 + DEBUG 返回栈
+ * @note    状态表只决定去向，不直接操作硬件；实际命令由 FsmTask 在状态变化后统一分发。
  */
 
 #ifndef STM32_INVERTED_PENDULUM_FSM_H
