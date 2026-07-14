@@ -33,7 +33,7 @@
 #define SWING_PULSE_MS        100u
 #define SWING_SAMPLE_MS        40u
 #define SWING_PRECHECK_MS      40u
-#define SWING_CENTER_RANGE    500
+#define SWING_CENTER_RANGE    535
 #define SWING_BOTTOM_RANGE    200u
 #define SWING_TIMEOUT_MS    20000u
 #define SWING_DIRECTION_SIGN    1  /* 1: 正 PWM=CW；-1: 整体反向 */
